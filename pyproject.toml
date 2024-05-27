@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+
+[tool.setuptools]
+py-modules = ["spatial_functa"]
+
+
+[project]
+name = "spatial_functa"
+version = "0.1.0"
+description = "A description of your package"
+authors = [{name = "Your Name", email = "your.email@example.com"}]
+license = {text = "MIT License"}
+requires-python = ">= 3.10"
+dependencies = ["flax", "optax", "ml_collections", "tqdm", "matplotlib", "wandb"]
+
+[project.urls]
+homepage = "https://github.com/yourusername/spatial_functa"
+documentation = "https://github.com/yourusername/spatial_functa/wiki"
+source = "https://github.com/yourusername/spatial_functa"
+bug-reports = "https://github.com/yourusername/spatial_functa/issues"

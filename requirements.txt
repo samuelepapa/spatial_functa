@@ -1,0 +1,6 @@
+flax
+optax
+ml_collections
+tqdm
+matplotlib
+wandb
