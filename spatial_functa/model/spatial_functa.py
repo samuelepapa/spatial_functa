@@ -375,6 +375,32 @@ class SIREN(nn.Module):
                 x_coord = (self.latent_spatial_dim * x_coord) % 1.0
                 y_coord = (self.latent_spatial_dim * y_coord) % 1.0
                 x = jnp.concat([x_coord, y_coord], axis=-1)
+            elif self.interpolation_type == "linear":
+                # calculate number of bits necessary to encode width and height
+                x_coord, y_coord = jnp.split(x, 2, axis=-1)
+                resolution = max(self.image_width, self.image_height)
+                num_bits = int(math.ceil(math.log2(resolution)))
+                def to_binary(arr, num_bits, axis=None, count=None):
+                    bits = jnp.asarray(1) << jnp.arange(num_bits, dtype='uint8')
+                    if axis is None:
+                        arr = jnp.ravel(arr)
+                        axis = 0
+                    arr = jnp.swapaxes(arr, axis, -1)
+                    unpacked = ((arr[..., None] & jnp.expand_dims(bits, tuple(range(arr.ndim)))) > 0).astype('uint8')
+                    unpacked = unpacked.reshape(unpacked.shape[:-2] + (-1,))
+                    if count is not None:
+                        if count > unpacked.shape[-1]:
+                            unpacked = jnp.pad(unpacked, [(0, 0)] * (unpacked.ndim - 1) + [(0, count - unpacked.shape[-1])])
+                        else:
+                            unpacked = unpacked[..., :count]
+                    return jnp.swapaxes(unpacked, axis, -1)
+                x_coord_binary = jnp.floor(x_coord * self.image_width).astype(jnp.uint16)
+                y_coord_binary = jnp.floor(y_coord * self.image_height).astype(jnp.uint16)
+                x_coord_binary = to_binary(x_coord_binary, num_bits, axis=1).reshape(-1, num_bits)
+                y_coord_binary = to_binary(y_coord_binary, num_bits, axis=1).reshape(-1, num_bits)
+                coords_binary = jnp.concatenate([x_coord_binary, y_coord_binary], axis=-1)
+                x = coords_binary
+
         else:
             latent_vector = latent_feat_map  # jnp.broadcast_to(latent_feat_map[0,0], x.shape[:-1] + (self.latent_dim,))
 
