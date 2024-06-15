@@ -167,6 +167,15 @@ class Trainer:
 
         self.forward = jax.pmap(_forward, axis_name="i", in_axes=(None, 0, 0, 0))
 
+    def get_latent_vector(self, latent_params):
+        return jax.pmap(
+            jax.vmap(self.latent_vector_model.apply, in_axes=(0,)),
+            axis_name="i",
+            in_axes=(0,),
+        )(
+            {"params": self.latent_params},
+        )
+
     def create_loss_fn(self):
         def _loss_fn(params, latent_params, batch, rng):
             field_params = params
@@ -216,7 +225,6 @@ class Trainer:
         )
 
         coords = batch.inputs
-        target = batch.targets
 
         latent_init_rng, field_init_rng, state_rng = jax.random.split(rng, 3)
 
@@ -324,7 +332,7 @@ class Trainer:
                 "mse": jnp.mean(jnp.square(recon - target), axis=(1, 2, 3)),
             }
             add_metrics(local_metrics)
-            plot_target = jax.device_get(target.reshape(-1, *self.image_shape))
+            
             if step == 0:
                 plot_target = jax.device_get(target.reshape(-1, *self.image_shape))
 
@@ -333,11 +341,6 @@ class Trainer:
                         {
                             f"val_images/recon_{i}": wandb.Image(recon[i]),
                             f"val_images/target_{i}": wandb.Image(plot_target[i]),
-                        },
-                        step=global_step,
-                    )
-                    wandb.log(
-                        {
                             "val_images/recon_distribution": wandb.Histogram(
                                 recon[i].flatten()
                             ),

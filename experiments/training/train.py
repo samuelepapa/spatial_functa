@@ -11,7 +11,7 @@ from absl import app, flags, logging
 from ml_collections import config_dict, config_flags
 from ml_collections.config_dict import ConfigDict
 
-from dataloader import (
+from spatial_functa.dataloader import (
     get_augmented_dataloader,
 )
 from spatial_functa import SIREN, LatentVector

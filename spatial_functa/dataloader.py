@@ -205,7 +205,7 @@ def get_augmented_dataloader(
         resolution,
         resolution,
         center_pixel=dataset_config.get("center_pixel", True),
-        zero_one=dataset_config.get("zero_one", True),
+        zero_one=dataset_config.get("zernvid0o_one", True),
     )
 
     batch_size = batch_size * jax.device_count()
