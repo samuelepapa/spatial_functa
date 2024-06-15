@@ -52,9 +52,9 @@ from spatial_functa.opt_builder import build_lr_scheduler
 Array = jnp.ndarray
 
 
-def forward(params, model, latent_vector, rng):
+def forward(params, model, latent_vector, rng, train):
     pred = model.apply(
-        {"params": params}, latent_vector, rngs={"dropout": rng}
+        {"params": params}, latent_vector, train=train, rngs={"dropout": rng}
     )
     return pred
 
@@ -107,22 +107,22 @@ class Trainer:
         self.create_train_step()
 
     def create_forward_fn(self):
-        def _forward(params, latent_vector, rng):
+        def _forward(params, latent_vector, rng, train):
             latent_vector = latent_vector / self.trainer_config.normalizing_factor
             rngs = jax.random.split(rng, latent_vector.shape[0])
-            return jax.vmap(forward, in_axes=(None, None, 0, 0))(
-                params, self.model, latent_vector, rngs
+            return jax.vmap(forward, in_axes=(None, None, 0, 0, None))(
+                params, self.model, latent_vector, rngs, train
             )
 
         self.forward = jax.jit(_forward)
-        self.pmapped_forward = jax.pmap(_forward, axis_name="i", in_axes=(None, 0, 0))
+        self.pmapped_forward = jax.pmap(_forward, axis_name="i", in_axes=(None, 0, 0, None))
 
     def create_loss_fn(self):
         def _loss_fn(params, batch, rng):
             field_params = params
             latent_vector = batch.inputs
             labels = batch.labels
-            logits = self.forward(field_params, latent_vector, rng=rng)
+            logits = self.forward(field_params, latent_vector, rng=rng, train=True)
 
             loss = jnp.mean(
                 optax.softmax_cross_entropy(logits=logits, labels=labels)
@@ -230,7 +230,7 @@ class Trainer:
             latent_vector = batch.inputs
             labels = batch.labels
             logits = jax.device_get(
-                self.pmapped_forward(self.state.params, latent_vector, same_rng_per_device)
+                self.pmapped_forward(self.state.params, latent_vector, same_rng_per_device, False)
             )
             loss = jnp.mean(
                 optax.softmax_cross_entropy(logits=logits, labels=labels)
