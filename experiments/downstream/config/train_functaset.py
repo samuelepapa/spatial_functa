@@ -11,9 +11,10 @@ def get_config():
     config.seed = 0
 
     config.train = ConfigDict()
-    config.train.batch_size = 64
-    config.train.num_steps = 2e5
+    config.train.batch_size = 16
+    config.train.num_steps = 1e5
     config.train.clip_grads = None
+    config.train.weight_decay = 1e-1
     config.train.num_minibatches = 1
     config.train.num_classes = 10
 
@@ -42,6 +43,6 @@ def get_config():
 
     # Validation
     config.valid = ConfigDict()
-    config.valid.val_interval = 5000 # in number of steps
+    config.valid.val_interval = 1000 # in number of steps
 
     return config

@@ -52,9 +52,9 @@ from spatial_functa.opt_builder import build_lr_scheduler
 Array = jnp.ndarray
 
 
-def forward(params, model, latent_vector):
+def forward(params, model, latent_vector, rng):
     pred = model.apply(
-        {"params": params}, latent_vector
+        {"params": params}, latent_vector, rngs={"dropout": rng}
     )
     return pred
 
@@ -78,6 +78,7 @@ class Trainer:
 
         self.trainer_config = config.train
         self.val_config = config.valid
+        self.model_config = config.model
         self.num_minibatches = self.trainer_config.get("num_minibatches", 1)
 
         # checkpointing
@@ -106,22 +107,22 @@ class Trainer:
         self.create_train_step()
 
     def create_forward_fn(self):
-        def _forward(params, latent_vector):
+        def _forward(params, latent_vector, rng):
             latent_vector = latent_vector / self.trainer_config.normalizing_factor
-            return jax.vmap(forward, in_axes=(None, None, 0))(
-                params, self.model, latent_vector
+            rngs = jax.random.split(rng, latent_vector.shape[0])
+            return jax.vmap(forward, in_axes=(None, None, 0, 0))(
+                params, self.model, latent_vector, rngs
             )
 
-
         self.forward = jax.jit(_forward)
-        self.pmapped_forward = jax.pmap(_forward, axis_name="i", in_axes=(None, 0))
+        self.pmapped_forward = jax.pmap(_forward, axis_name="i", in_axes=(None, 0, 0))
 
     def create_loss_fn(self):
         def _loss_fn(params, batch, rng):
             field_params = params
             latent_vector = batch.inputs
             labels = batch.labels
-            logits = self.forward(field_params, latent_vector)
+            logits = self.forward(field_params, latent_vector, rng=rng)
 
             loss = jnp.mean(
                 optax.softmax_cross_entropy(logits=logits, labels=labels)
@@ -149,7 +150,7 @@ class Trainer:
             batch, 0, self.num_signals_per_device // self.num_minibatches
         )
 
-        latent_vector = batch.inputs
+        latent_vector = batch.inputs[0][0]
 
         classifier_init_rng, state_rng = jax.random.split(rng, 2)
 
@@ -166,8 +167,9 @@ class Trainer:
             num_steps=self.num_steps,
         )
         # add gradient clipping to optimizer
-        optimizer = optax.adam(
+        optimizer = optax.adamw(
             learning_rate=self.lr_schedule,
+            weight_decay=self.trainer_config.weight_decay,
         )
         if self.trainer_config.get("clip_grads", None) is not None:
             optimizer = optax.chain(
@@ -175,11 +177,14 @@ class Trainer:
                 optimizer,
             )
 
+        new_rngs = jax.random.split(state_rng, self.num_devices + 1)
+        self.per_device_rng = new_rngs[:-1]
+
         self.state = TrainState.create(
             apply_fn=self.model.apply,
             params=params,
             tx=optimizer,
-            rng=state_rng,
+            rng=new_rngs[-1],
         )
 
     def validate(self, global_step):
@@ -215,13 +220,17 @@ class Trainer:
         val_steps = len(self.val_loader)
         iter_loader = iter(self.val_loader)
 
+        cur_rng = self.per_device_rng[0]
+
+        same_rng_per_device = jnp.broadcast_to(cur_rng, (self.num_devices,) + cur_rng.shape)
+
         for step in tqdm(range(val_steps), desc="Validation", total=val_steps):
             batch = next(iter_loader)
             batch = self.process_batch(batch)
             latent_vector = batch.inputs
             labels = batch.labels
             logits = jax.device_get(
-                self.pmapped_forward(self.state.params, latent_vector)
+                self.pmapped_forward(self.state.params, latent_vector, same_rng_per_device)
             )
             loss = jnp.mean(
                 optax.softmax_cross_entropy(logits=logits, labels=labels)
@@ -282,6 +291,11 @@ class Trainer:
             )
         )
 
+    def update_per_device_rng(self):
+        self.state = self.state.replace(
+            rng=jax.random.split(self.state.rng, self.num_devices)
+        )
+
     def train(self):
         # print all the shape of the parameters
         print(jax.tree_map(lambda x: x.shape, self.state.params))
@@ -297,8 +311,8 @@ class Trainer:
             if step % self.val_config.val_interval == 0 or (step == self.num_steps - 1):
                 self.validate(step)
 
-            self.state, metrics, _ = self.train_step(
-                self.state, batch
+            self.state, metrics, _, self.per_device_rng = self.train_step(
+                self.state, batch, self.per_device_rng
             )
 
             if self.checkpointing_config is not None and (
@@ -330,7 +344,15 @@ class Trainer:
         num_signals_per_device = batch_size // self.num_devices
 
         # reshape to account for the number of devices
-        inputs = batch.inputs.reshape(self.num_devices, num_signals_per_device, -1)
+        if self.model_config.name == "mlp":
+            inputs = batch.inputs.reshape(self.num_devices, num_signals_per_device, -1)
+        elif self.model_config.name == "transformer":
+            inputs = batch.inputs.reshape(
+                self.num_devices, num_signals_per_device, self.model_config.num_patches, -1
+            )
+        else:
+            raise ValueError(f"Unknown model {self.model_config.name}")
+        
         labels = batch.labels.reshape(
             self.num_devices,
             num_signals_per_device,
@@ -345,11 +367,12 @@ class Trainer:
         return dataclasses.replace(batch, inputs=inputs, labels=labels)
 
     def create_train_step(self):
-        def _train_step(state, batch):
-            rng, cur_rng = jax.random.split(state.rng)
+        def _train_step(state, batch, per_device_rng):
             _loss_fn = lambda params, batch, rng: self.loss_fn(
                 params, batch, rng
             )
+
+            per_device_rng, cur_rng = jax.random.split(per_device_rng)
             grads, metrics, visuals = accumulate_gradients(
                 state.params,
                 batch,
@@ -364,12 +387,12 @@ class Trainer:
 
             metrics = jax.lax.pmean(metrics, axis_name="i")
 
-            state = state.apply_gradients(grads=grads, rng=rng)
-            return state, metrics, visuals
+            state = state.apply_gradients(grads=grads)
+            return state, metrics, visuals, per_device_rng
 
         self.train_step = jax.pmap(
             _train_step,
             axis_name="i",
-            in_axes=(None, 0),
-            out_axes=(None, None, 0),
+            in_axes=(None, 0, 0),
+            out_axes=(None, None, 0, 0),
         )

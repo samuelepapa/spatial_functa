@@ -21,13 +21,14 @@ from spatial_functa.classifier_trainer import Trainer
 from spatial_functa.grad_acc import Batch
 from spatial_functa.dataloader import numpy_collate
 from spatial_functa.model.mlp import MLP
+from spatial_functa.model.transformer import VisionTransformer
 
 
 _CONFIG = config_flags.DEFINE_config_file(
     "config", "experiments/downstream/config/train_functaset.py"
 )
 _MODEL = config_flags.DEFINE_config_file(
-    "model", "experiments/downstream/config/classifier_model.py:mlp"
+    "model", "experiments/downstream/config/classifier_model.py:transformer"
 )
 _DATASET = config_flags.DEFINE_config_file(
     "dataset", "experiments/downstream/config/functa_dataset.py:cifar10"
@@ -94,7 +95,7 @@ class h5py_dataloader(torch.utils.data.Dataset):
                 self.relative_idx[idx] = rel_idx
 
     def __len__(self):
-        return self.num_samples
+        return 48 # self.num_samples
 
     def __getitem__(self, idx):
         path = self.idx_to_path[idx]
@@ -126,6 +127,7 @@ def main(_):
         batch_size=config.train.batch_size * jax.device_count(),
         collate_fn=batch_collate,
         shuffle=True,
+        drop_last=True,
     )
 
     val_dataloader = torch.utils.data.DataLoader(
@@ -133,23 +135,38 @@ def main(_):
         batch_size=config.train.batch_size * jax.device_count() // config.train.num_minibatches,
         collate_fn=batch_collate,
         shuffle=False,
+        drop_last=True,
     )
 
-    test_dataoader = torch.utils.data.DataLoader(
+    test_dataloader = torch.utils.data.DataLoader(
         h5py_dataloader(path / "test"),
         batch_size=config.train.batch_size * jax.device_count() // config.train.num_minibatches,
         collate_fn=batch_collate,
         shuffle=False,
+        drop_last=True,
     )
 
 
     # create the model
-    model = MLP(
-        hidden_dim=config.model.hidden_dim,
-        num_classes=config.dataset.num_classes,
-        num_layers=config.model.num_layers,
-    )
-
+    if config.model.name == "mlp":
+        model = MLP(
+            hidden_dim=config.model.hidden_dim,
+            num_classes=config.dataset.num_classes,
+            num_layers=config.model.num_layers,
+            dropout_prob=config.model.dropout_prob,
+        )
+    elif config.model.name == "transformer":
+        model = VisionTransformer(
+            num_classes=config.dataset.num_classes,
+            embed_dim=config.model.embed_dim,
+            hidden_dim=config.model.hidden_dim,
+            num_heads=config.model.num_heads,
+            num_layers=config.model.num_layers,
+            num_patches=config.model.num_patches,
+            dropout_prob=config.model.dropout_prob,
+        )
+    else:
+        raise ValueError(f"Unknown model {config.model.name}")
 
     example_batch = next(iter(train_dataloader))
     # initialize wandb
