@@ -19,16 +19,16 @@ from spatial_functa.trainer import Trainer
 
 
 _CONFIG = config_flags.DEFINE_config_file(
-    "config", "experiments/training/config/config.py"
+    "config", "experiments/fitting/config/config.py"
 )
 _MODEL = config_flags.DEFINE_config_file(
-    "model", "experiments/training/config/model.py:latent"
+    "model", "experiments/fitting/config/model.py:latent"
 )
 _DATASET = config_flags.DEFINE_config_file(
-    "dataset", "experiments/training/config/dataset.py:cifar10"
+    "dataset", "experiments/fitting/config/dataset.py:cifar10"
 )
 _SCHEDULER = config_flags.DEFINE_config_file(
-    "scheduler", "experiments/training/config/scheduler.py:constant"
+    "scheduler", "experiments/fitting/config/scheduler.py:constant"
 )
 
 

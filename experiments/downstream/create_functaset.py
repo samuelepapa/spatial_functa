@@ -149,7 +149,7 @@ def main(_):
             name=experiment_dir.name + f"_{name}",
             dir=str(experiment_dir),
         )
-        functabank_size = min(config.functa_bank_size_per_batch * batch_size, len(loader.dataset))
+        functabank_size = min(config.functaset.functa_bank_size_per_batch * batch_size, len(loader.dataset))
         functabank = np.zeros((functabank_size, loaded_config.model.latent_spatial_dim, loaded_config.model.latent_spatial_dim, loaded_config.model.latent_dim))
         labelbank = np.zeros((functabank_size, 1))
 

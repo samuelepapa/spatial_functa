@@ -1,7 +1,30 @@
-# spatial_functa
+# An unofficial implementation of *spatial functa* 🌌
+
+This is an unofficial implementation of Spatial Functa by ...
+
+*Spatial functa* is an improvement upon *functa*. The authors have released the source code for *functa*, however, not for *spatial functa*. This repository introduces a few fundamental changes (use of `flax` and shared backbone parameters), but tries to match the original *functa* implementation when possible.
+
+If you use this repository in your paper, please cite the original work and this repository in your work (or in the aknowledgments), using this:
+
+```
+@misc{
+
+}
+```
+
+Contents of this README:
+
+- [Experimental results](#experimental-results)
+- [Installation](#installation)
+- [Usage](#usage)
+    - [Fitting](#fitting)
+    - [Downstream tasks](#downstream-tasks)
+
+## Experimental results
+
 
 ## Installation
-You must have JAX and the CPU version of PyTorch (also the CUDA version of PyTorch works, just not necessary) installed. You can install the package by running the following command:
+You must have JAX and the CPU version of PyTorch (also the CUDA version of PyTorch works, just not necessary) installed. You can install the packages by running the following commands (remember to change JAX and PyTorch installs based on your system requirements):
 ```bash
 pip install -U "jax[cuda12]"
 
@@ -9,3 +32,42 @@ pip3 install torch torchvision torchaudio --index-url https://download.pytorch.o
 
 pip install -e .
 ```
+
+## Usage
+### Fitting
+To fit a model with default parameters and dataset simply run the following:
+
+```bash
+python experiments/fitting/train.py
+```
+
+*Note that the environment variable `DATA_PATH` is used to point to the root of the datasets' directory for convenience*.
+
+The library uses `ml_collections` to manage config. To change dataset, just do the following (for now only MNIST and CIFAR10 have been implemented):
+
+```bash
+python experiments/fitting/train.py --dataset=experiments/config/datset.py:mnist
+```
+
+To change the model parameters do something similar to the following:
+
+```bash
+python experiments/fitting/train.py --model.num_layers=12 --model.omega_0=15
+```
+
+### Downstream tasks
+
+To perform downstreamtasks, you first need to create the *functaset*, using the following:
+
+```bash
+python experiments/downstream/create_functaset.py --config.functa_model_dir='path_to_experiment_folder' --config.functaset.path=spatial_cifar10
+```
+
+The `config.functaset.path` is relative to the `DATA_PATH` environment variable. The script creates a series of *banks*, each with a number of batches determined by `config.functaset.functa_bank_size_per_batch`. This is done to allow possible future batched loading in RAM, allow for soft failure of the dataset creation process (which would otherwise catastrofically fail), to allow for very large datasets to be loaded in RAM while being created, and make transfer of files easier. Note that different batch size, number of minibatches and number of devices can be used compared to what was done in training.
+
+Then, the downstream model can be trained. Use the following to train a transformer:
+
+```bash
+python experiments/downstream/train.py --model=experiment/downstream/config/classifier_model.py:transformer --config.functaset.path=spatial_cifar10
+```
+

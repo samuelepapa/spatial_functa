@@ -6,18 +6,21 @@ from ml_collections import ConfigDict
 
 def get_config():
     config = ConfigDict()
-
-    # Experiment directory
-    config.experiment_dir = f'outputs/downstream_functa_{time.strftime("%Y%m%d-%H%M%S")}/'
-    config.functa_model_dir = 'outputs/functa_20240615-195549/'
-    config.functa_bank_size_per_batch = 10000
-    config.functaset = ConfigDict()
-    config.functaset.path = "spatial_cifar10" # this is relative to the DATA_PATH env var
     config.seed = 0
 
+    # Experiment directory to store artifacts
+    config.experiment_dir = f'outputs/downstream_functa_{time.strftime("%Y%m%d-%H%M%S")}/'
+    # Root folder of the checkpoint, the checkpoint should be in 
+    # config.functa_model_dir / ckpts / best_psnr
+    config.functa_model_dir = 'outputs/functa_20240615-195549/'
+
+    config.functaset = ConfigDict()
+    config.functaset.path = "spatial_cifar10" # this is relative to the DATA_PATH env var    
+    config.functaset.functa_bank_size_per_batch = 10000 # number of batches per h5py file created
+
+    # Params used during fitting
     config.train = ConfigDict()
     config.train.batch_size = 256
-    config.train.clip_grads = None
     config.train.num_minibatches = 1
 
     # Logging
