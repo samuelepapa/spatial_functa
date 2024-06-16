@@ -11,7 +11,7 @@ def get_config():
     config.seed = 0
 
     config.train = ConfigDict()
-    config.train.batch_size = 16
+    config.train.batch_size = 256
     config.train.num_steps = 1e5
     config.train.clip_grads = None
     config.train.weight_decay = 1e-1
@@ -26,7 +26,7 @@ def get_config():
     # Logging
     config.train.log_dir = config.experiment_dir
     config.train.log_steps = ConfigDict()
-    config.train.log_steps.loss = 10
+    config.train.log_steps.loss =200
     config.train.log_steps.image = 2500
 
     # Profiling

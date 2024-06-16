@@ -12,7 +12,7 @@ class MLP(nn.Module):
     def __call__(self, x, train=True):
         for l in range(self.num_layers):
             x = nn.Dense(self.hidden_dim)(x)
-            x = nn.LayerNorm()(x)
+            # x = nn.LayerNorm()(x)
             x = nn.gelu(x)
 
         x = nn.Dense(self.num_classes)(x)

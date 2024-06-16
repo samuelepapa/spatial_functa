@@ -52,9 +52,15 @@ from spatial_functa.opt_builder import build_lr_scheduler
 Array = jnp.ndarray
 
 
-def forward(params, model, latent_vector, rng, train):
+def train_forward(params, model, latent_vector, rng):
     pred = model.apply(
-        {"params": params}, latent_vector, train=train, rngs={"dropout": rng}
+        {"params": params}, latent_vector, train=True, rngs={"dropout": rng}
+    )
+    return pred
+
+def val_forward(params, model, latent_vector, rng):
+    pred = model.apply(
+        {"params": params}, latent_vector, train=False, rngs={"dropout": rng}
     )
     return pred
 
@@ -107,22 +113,29 @@ class Trainer:
         self.create_train_step()
 
     def create_forward_fn(self):
-        def _forward(params, latent_vector, rng, train):
+        def _train_forward(params, latent_vector, rng):
             latent_vector = latent_vector / self.trainer_config.normalizing_factor
             rngs = jax.random.split(rng, latent_vector.shape[0])
-            return jax.vmap(forward, in_axes=(None, None, 0, 0, None))(
-                params, self.model, latent_vector, rngs, train
+            return jax.vmap(train_forward, in_axes=(None, None, 0, 0))(
+                params, self.model, latent_vector, rngs
+            )
+        
+        def _val_forward(params, latent_vector, rng):
+            latent_vector = latent_vector / self.trainer_config.normalizing_factor
+            rngs = jax.random.split(rng, latent_vector.shape[0])
+            return jax.vmap(val_forward, in_axes=(None, None, 0, 0))(
+                params, self.model, latent_vector, rngs
             )
 
-        self.forward = jax.jit(_forward)
-        self.pmapped_forward = jax.pmap(_forward, axis_name="i", in_axes=(None, 0, 0, None))
+        self.train_forward = jax.jit(_train_forward)
+        self.val_forward = jax.pmap(_val_forward, axis_name="i", in_axes=(None, 0, 0))
 
     def create_loss_fn(self):
         def _loss_fn(params, batch, rng):
             field_params = params
             latent_vector = batch.inputs
             labels = batch.labels
-            logits = self.forward(field_params, latent_vector, rng=rng, train=True)
+            logits = self.train_forward(field_params, latent_vector, rng=rng)
 
             loss = jnp.mean(
                 optax.softmax_cross_entropy(logits=logits, labels=labels)
@@ -230,7 +243,7 @@ class Trainer:
             latent_vector = batch.inputs
             labels = batch.labels
             logits = jax.device_get(
-                self.pmapped_forward(self.state.params, latent_vector, same_rng_per_device, False)
+                self.val_forward(self.state.params, latent_vector, same_rng_per_device,)
             )
             loss = jnp.mean(
                 optax.softmax_cross_entropy(logits=logits, labels=labels)

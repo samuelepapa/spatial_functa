@@ -20,8 +20,8 @@ def get_config(model_name: str):
         config.num_patches = 4 * 4
     elif model_name == "mlp":
         config.hidden_dim = 1024
-        config.num_layers = 4
-        config.dropout_prob = 0.0
+        config.num_layers = 3
+        config.dropout_prob = 0.2
     else:
         raise ValueError(f"Unknown model {model_name}")
 

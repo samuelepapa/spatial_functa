@@ -29,7 +29,7 @@ from spatial_functa.model.interpolation import interpolate_2d
 from spatial_functa.opt_builder import build_lr_scheduler
 
 Array = jnp.ndarray
-
+Shape = Sequence[int | Any]
 
 class TrainState(train_state.TrainState):
     # Adding rng key for masking
@@ -91,7 +91,7 @@ def custom_uniform(
       the range ``[-range, range)``.
     """
 
-    def init(key: KeyArray, shape: core.Shape, dtype: Any = dtype) -> Any:
+    def init(key: KeyArray, shape: Shape, dtype: Any = dtype) -> Any:
         dtype = dtypes.canonicalize_dtype(dtype)
         named_shape = core.as_named_shape(shape)
         fan_in, fan_out = _compute_fans(named_shape, in_axis, out_axis, batch_axis)

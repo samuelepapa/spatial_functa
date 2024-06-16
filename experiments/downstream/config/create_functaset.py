@@ -9,14 +9,14 @@ def get_config():
 
     # Experiment directory
     config.experiment_dir = f'outputs/downstream_functa_{time.strftime("%Y%m%d-%H%M%S")}/'
-    config.functa_model_dir = 'outputs/functa_20240611-112046/'
-    config.functa_bank_size_per_batch = 1000
+    config.functa_model_dir = 'outputs/functa_20240615-195549/'
+    config.functa_bank_size_per_batch = 10000
     config.functaset = ConfigDict()
     config.functaset.path = "spatial_cifar10" # this is relative to the DATA_PATH env var
     config.seed = 0
 
     config.train = ConfigDict()
-    config.train.batch_size = 64
+    config.train.batch_size = 256
     config.train.clip_grads = None
     config.train.num_minibatches = 1
 

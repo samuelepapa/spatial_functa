@@ -173,7 +173,7 @@ class Trainer:
             axis_name="i",
             in_axes=(0,),
         )(
-            {"params": self.latent_params},
+            {"params": latent_params},
         )
 
     def create_loss_fn(self):
