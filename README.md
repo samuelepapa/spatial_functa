@@ -33,9 +33,9 @@ These are preliminary results for `functa` on CIFAR10. The model uses a latent d
 
 |Target| Recon|
 |-----|----|
-| <img src="assets/media_images_val_images_target_4.png"> | <img src="assets/media_images_val_images_recon_4.png" > |
-| <img src="assets/media_images_val_images_target_0.png" > | <img src="assets/media_images_val_images_recon_0.png" > |
-| <img src="assets/media_images_val_images_target_1.png" > | <img src="assets/media_images_val_images_recon_1.png" > |
+| <img src="assets/media_images_val_images_target_4.png" width=128px> | <img src="assets/media_images_val_images_recon_4.png"  width=128px> |
+| <img src="assets/media_images_val_images_target_0.png"  width=128px> | <img src="assets/media_images_val_images_recon_0.png"  width=128px> |
+| <img src="assets/media_images_val_images_target_1.png"  width=128px> | <img src="assets/media_images_val_images_recon_1.png"  width=128px> |
 
 
 
