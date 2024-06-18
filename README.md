@@ -22,6 +22,32 @@ Contents of this README:
 
 ## Experimental results
 
+### Repoducing `functa`
+
+These are preliminary results for `functa` on CIFAR10. The model uses a latent dimension of 256, `omega_0` of 30, 15 layers, 512 hidden dimension. Learning rate of 3e-6. Downstream model is an MLP with 3 layers and 1024 hidden dimension, 50 augmentations are used per signal, the latents are scaled by a constant factor, label smoothing is used, and a weight decay of 1e-1 is applied with learning rate of 1e-3.
+
+<style>
+img{
+    width: 128px;
+  image-rendering: optimizeSpeed;             /* Older versions of FF          */
+  image-rendering: -moz-crisp-edges;          /* FF 6.0+                       */
+  image-rendering: -webkit-optimize-contrast; /* Safari                        */
+  image-rendering: -o-crisp-edges;            /* OS X & Windows Opera (12.02+) */
+  image-rendering: pixelated;                 /* Awesome future-browsers       */
+  -ms-interpolation-mode: nearest-neighbor;   /* IE                            */
+}
+    </style>
+| Num steps| Val PSNR | Val Acc |
+|------|-----|-----|
+|75k| 38.44| 59% |
+
+|Target| Recon|
+|-----|----|
+| <img src="assets/media_images_val_images_target_4.png" width=32px> | <img src="assets/media_images_val_images_recon_4.png" width=32px> |
+| <img src="assets/media_images_val_images_target_0.png" width=32px> | <img src="assets/media_images_val_images_recon_0.png" width=32px> |
+| <img src="assets/media_images_val_images_target_1.png" width=32px> | <img src="assets/media_images_val_images_recon_1.png" width=32px> |
+
+
 
 ## Installation
 You must have JAX and the CPU version of PyTorch (also the CUDA version of PyTorch works, just not necessary) installed. You can install the packages by running the following commands (remember to change JAX and PyTorch installs based on your system requirements):
