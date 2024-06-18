@@ -26,17 +26,7 @@ Contents of this README:
 
 These are preliminary results for `functa` on CIFAR10. The model uses a latent dimension of 256, `omega_0` of 30, 15 layers, 512 hidden dimension. Learning rate of 3e-6. Downstream model is an MLP with 3 layers and 1024 hidden dimension, 50 augmentations are used per signal, the latents are scaled by a constant factor, label smoothing is used, and a weight decay of 1e-1 is applied with learning rate of 1e-3.
 
-<style>
-img{
-    width: 128px;
-  image-rendering: optimizeSpeed;             /* Older versions of FF          */
-  image-rendering: -moz-crisp-edges;          /* FF 6.0+                       */
-  image-rendering: -webkit-optimize-contrast; /* Safari                        */
-  image-rendering: -o-crisp-edges;            /* OS X & Windows Opera (12.02+) */
-  image-rendering: pixelated;                 /* Awesome future-browsers       */
-  -ms-interpolation-mode: nearest-neighbor;   /* IE                            */
-}
-    </style>
+
 | Num steps| Val PSNR | Val Acc |
 |------|-----|-----|
 |75k| 38.44| 59% |
