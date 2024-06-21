@@ -7,8 +7,12 @@ This is an unofficial implementation of Spatial Functa by ...
 If you use this repository in your paper, please cite the original work and this repository in your work (or in the aknowledgments), using this:
 
 ```
-@misc{
-
+@misc{spatialFunctaRepo,
+	author = {Papa, Samuele},
+	title = {Unofficial implementation of spatial functa},
+	howpublished = {\url{https://github.com/samuelepapa/spatial-functa}},
+	year = {2024},
+	note = {[Accessed 21-06-2024]},
 }
 ```
 
@@ -31,11 +35,9 @@ These are preliminary results for `functa` on CIFAR10. The model uses a latent d
 |------|-----|-----|
 |75k| 38.44| 59% |
 
-|Target| Recon|
-|-----|----|
-| <img src="assets/media_images_val_images_target_4.png" width=128px> | <img src="assets/media_images_val_images_recon_4.png"  width=128px> |
-| <img src="assets/media_images_val_images_target_0.png"  width=128px> | <img src="assets/media_images_val_images_recon_0.png"  width=128px> |
-| <img src="assets/media_images_val_images_target_1.png"  width=128px> | <img src="assets/media_images_val_images_recon_1.png"  width=128px> |
+|Original|<img src="assets/media_images_val_images_target_4.png" width=128px>|<img src="assets/media_images_val_images_target_0.png"  width=128px> | <img src="assets/media_images_val_images_target_1.png"  width=128px> |
+|---|-----|----|----|
+|**Recon**| <img src="assets/media_images_val_images_recon_4.png"  width=128px> | <img src="assets/media_images_val_images_recon_0.png"  width=128px> | <img src="assets/media_images_val_images_recon_1.png"  width=128px> |
 
 
 
