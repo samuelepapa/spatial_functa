@@ -305,11 +305,9 @@ class SIREN(nn.Module):
     interpolation_type: str = "linear"
 
     def setup(self):
-        # overwrite modulation_hidden_dim to be the same as hidden_dim
-        self.modulation_hidden_dim = self.hidden_dim
         self.conv_blocks = [
             nn.Conv(
-                self.modulation_hidden_dim, 
+                self.hidden_dim, 
                 (3, 3), 
                 (1, 1), 
                 padding="SAME", 
@@ -317,7 +315,7 @@ class SIREN(nn.Module):
         ]
         self.latent_to_modulation = LatentToModulation(
             input_dim=self.input_dim if self.latent_spatial_dim > 1 else 1,
-            layer_sizes=[self.modulation_hidden_dim] * self.modulation_num_layers,
+            layer_sizes=[self.hidden_dim] * self.modulation_num_layers,
             num_modulation_layers=self.num_layers - 1,
             modulation_dim=self.hidden_dim,
             scale_modulate=self.scale_modulate,
