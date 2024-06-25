@@ -190,14 +190,14 @@ class MLP(nn.Module):
         for i, size in enumerate(self.layer_sizes[:-1]):
             x = nn.Dense(
                 size,
-                kernel_init=jax.nn.initializers.kaiming_uniform(),
+                kernel_init=jax.nn.initializers.truncated_normal(1/jnp.sqrt(x.shape[-1])),
                 bias_init=jax.nn.initializers.zeros,
                 name=f"mlp_linear_{i}",
             )(x)
             x = self.activation(x)
         return nn.Dense(
             self.layer_sizes[-1],
-            kernel_init=jax.nn.initializers.kaiming_uniform(),
+            kernel_init=jax.nn.initializers.truncated_normal(1/jnp.sqrt(x.shape[-1])),
             bias_init=jax.nn.initializers.zeros,
             name=f"mlp_linear_{len(self.layer_sizes) - 1}",
         )(x)
@@ -305,8 +305,15 @@ class SIREN(nn.Module):
     interpolation_type: str = "linear"
 
     def setup(self):
+        # overwrite modulation_hidden_dim to be the same as hidden_dim
+        self.modulation_hidden_dim = self.hidden_dim
         self.conv_blocks = [
-            nn.Conv(self.modulation_hidden_dim, (3, 3), (1, 1), padding="SAME"),
+            nn.Conv(
+                self.modulation_hidden_dim, 
+                (3, 3), 
+                (1, 1), 
+                padding="SAME", 
+                kernel_init=nn.initializers.truncated_normal(1/jnp.sqrt(self.latent_spatial_dim*self.latent_spatial_dim*self.latent_dim)))
         ]
         self.latent_to_modulation = LatentToModulation(
             input_dim=self.input_dim if self.latent_spatial_dim > 1 else 1,
