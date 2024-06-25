@@ -513,9 +513,9 @@ class Trainer:
                 self.trainer_config.get("num_minibatches", 1),
                 _loss_fn,
             )
-            grads = jax.tree_util.tree_map(
-                lambda x: x / self.num_signals_per_device, grads
-            )
+            # grads = jax.tree_util.tree_map(
+            #     lambda x: x / self.num_signals_per_device, grads
+            # )
             grads = jax.lax.pmean(grads, axis_name="i")
 
             metrics = jax.lax.pmean(metrics, axis_name="i")
