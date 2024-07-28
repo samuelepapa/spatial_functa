@@ -14,6 +14,9 @@ from absl import app, flags, logging
 from ml_collections import config_dict, config_flags
 from ml_collections.config_dict import ConfigDict
 
+import matplotlib.pyplot as plt
+
+
 from spatial_functa.dataloader import (
     get_augmented_dataloader,
 )
@@ -27,18 +30,22 @@ _CONFIG = config_flags.DEFINE_config_file(
 _DATASET = config_flags.DEFINE_config_file(
     "dataset", "experiments/downstream/config/dataset.py:cifar10"
 )
+_FUNCTASET = config_flags.DEFINE_config_file(
+    "functaset", "experiments/downstream/config/functaset.py"
+)
 
 from dataloader_functaset import h5py_dataloader, batch_collate
-
 
 
 def load_config_and_store() -> Tuple[ConfigDict, Path]:
     # load the config
     config = _CONFIG.value
     dataset_config = _DATASET.value
+    functaset_config = _FUNCTASET.value
 
     config.unlock()
     config.dataset = dataset_config
+    config.functaset = functaset_config
     config.lock()
     print(config)
 
@@ -126,7 +133,6 @@ def main(_):
     example_batch = next(iter(train_dataloader))
     # initialize wandb
 
-
     trainer = Trainer(
         model=model,
         latent_vector_model=latent_vector_model,
@@ -142,13 +148,13 @@ def main(_):
     field_params = trainer.state.params
     starting_latent_params = trainer.latent_params
 
-    functaset_dir = Path(os.environ.get("DATA_PATH", "data")) / Path(config.functaset.path) / Path("train")
-    functa_dataset = h5py_dataloader(functaset_dir)
+    functaset_dir = Path(os.environ.get("DATA_PATH", "data")) / Path(config.functaset.path)
+    functa_dataset = h5py_dataloader(functaset_dir, name=config.functaset.name, split="train")
     functa_dataloader = torch.utils.data.DataLoader(
         functa_dataset,
         batch_size=8,
         collate_fn=batch_collate,
-        shuffle=True,
+        shuffle=False,
         drop_last=True,
     )
 
@@ -163,11 +169,15 @@ def main(_):
             zero_one=config.dataset.get("zero_one", True),
         ).reshape(-1,2)
         coords = coords
+        
+        print(latent_vector.shape, coords.shape)
 
+        pred = trainer.model.apply(
+            {"params": field_params}, coords, latent_vector[0]
+        )
+        plt.imshow(jax.device_get(pred.reshape(32,32, 3)))
+        plt.savefig("test.png")
         break
-    # loss, recon, latent_params = trainer.model.apply(
-    #     {"params": field_params}, starting_latent_params, functa_dataloader.dataset[0].inputs, functa_dataloader.dataset[0].targets
-    # )
 
     # batch_size = config.train.batch_size * jax.device_count() * config.train.num_minibatches
     

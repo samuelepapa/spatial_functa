@@ -1,22 +1,19 @@
 
 import time
+import os
 
 from ml_collections import ConfigDict
 
 
-def get_config():
+def get_config() -> ConfigDict:
     config = ConfigDict()
     config.seed = 0
 
     # Experiment directory to store artifacts
-    config.experiment_dir = f'outputs/downstream_functa_{time.strftime("%Y%m%d-%H%M%S")}/'
+    config.experiment_dir = f'outputs/create_functaset_{time.strftime("%Y%m%d-%H%M%S")}_{os.uname().nodename}/'
     # Root folder of the checkpoint, the checkpoint should be in 
     # config.functa_model_dir / ckpts / best_psnr
-    config.functa_model_dir = 'outputs/functa_20240615-195549/'
-
-    config.functaset = ConfigDict()
-    config.functaset.path = "spatial_cifar10" # this is relative to the DATA_PATH env var    
-    config.functaset.functa_bank_size_per_batch = 10000 # number of batches per h5py file created
+    config.functa_model_dir = 'outputs/functa_20240726-181008/'
 
     # Params used during fitting
     config.train = ConfigDict()
@@ -30,9 +27,10 @@ def get_config():
     config.train.log_steps.image = 2500
 
     # Profiling
-    # Set to None and comment the following two lines to disable
-    config.train.profiler = ConfigDict()  
-    config.train.profiler.start_step = 200
-    config.train.profiler.end_step = 300
+    # Set to None and comment the two lines that follow to disable
+    config.train.profiler = None # ConfigDict()  
+    # config.train.profiler.start_step = 200
+    # config.train.profiler.end_step = 300
 
     return config
+

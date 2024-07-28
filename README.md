@@ -44,6 +44,10 @@ These are preliminary results for `functa` on CIFAR10. The model uses a latent d
 ## Installation
 You must have JAX and the CPU version of PyTorch (also the CUDA version of PyTorch works, just not necessary) installed. You can install the packages by running the following commands (remember to change JAX and PyTorch installs based on your system requirements):
 ```bash
+conda create -n spatial_functa python=3.11
+
+conda activate spatial_functa
+
 pip install -U "jax[cuda12]"
 
 pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu

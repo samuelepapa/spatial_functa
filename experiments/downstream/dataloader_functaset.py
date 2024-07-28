@@ -4,6 +4,10 @@ import h5py
 from spatial_functa.grad_acc import Batch
 from spatial_functa.dataloader import numpy_collate
 
+import pdb
+
+from pathlib import Path
+
 class npy_dataloader(torch.utils.data.Dataset):
     def __init__(self, path):
         # npy pattern is "name_startid-endid.npy" find all files with this pattern
@@ -22,28 +26,21 @@ class npy_dataloader(torch.utils.data.Dataset):
         return self.functaset[idx]
     
 class h5py_dataloader(torch.utils.data.Dataset):
-    def __init__(self, path):
+    def __init__(self, path, name, split):
         # npy pattern is "name_startid-endid.npy" find all files with this pattern
-        paths = list(path.glob("*.h5"))
-        self.num_samples = max([int(path.stem.split("_")[-1].split("-")[-1]) for path in paths])
-        self.idx_to_path = {}
-        self.relative_idx = {}
-
-        for path in paths:
-            start, end = path.stem.split("_")[-1].split("-")
-            start, end = int(start), int(end)
-            for rel_idx, idx in enumerate(range(start, end+1)):
-                self.idx_to_path[idx] = path
-                self.relative_idx[idx] = rel_idx
+        self.path = path / Path(f"functaset_{name}_{split}.h5")
+        with h5py.File(self.path, "r") as f:
+            functaset = f['functaset']
+            
+            self.num_samples = functaset.shape[0]
 
     def __len__(self):
         return self.num_samples
 
     def __getitem__(self, idx):
-        path = self.idx_to_path[idx]
-        rel_idx = self.relative_idx[idx]
-        with h5py.File(path, "r") as f:
-            return f['functabank'][rel_idx], f['labelbank'][rel_idx]
+        with h5py.File(self.path, "r") as f:
+            return f['functaset'][idx], f['labels'][idx]
+
 
 def batch_collate(batch):
     batch_list = numpy_collate(batch)

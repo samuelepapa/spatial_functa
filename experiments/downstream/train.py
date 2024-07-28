@@ -29,10 +29,10 @@ _CONFIG = config_flags.DEFINE_config_file(
     "config", "experiments/downstream/config/train_functaset.py"
 )
 _MODEL = config_flags.DEFINE_config_file(
-    "model", "experiments/downstream/config/classifier_model.py:mlp"
+    "model", "experiments/downstream/config/classifier_model.py:transformer"
 )
-_DATASET = config_flags.DEFINE_config_file(
-    "dataset", "experiments/downstream/config/functa_dataset.py:cifar10"
+_FUNCTASET = config_flags.DEFINE_config_file(
+    "dataset", "experiments/downstream/config/functaset.py"
 )
 _SCHEDULER = config_flags.DEFINE_config_file(
     "scheduler", "experiments/downstream/config/scheduler.py:constant"
@@ -43,11 +43,11 @@ def load_config_and_store() -> Tuple[ConfigDict, Path]:
     # load the config
     config = _CONFIG.value
     model_config = _MODEL.value
-    dataset_config = _DATASET.value
+    functaset_config = _FUNCTASET.value
     scheduler_config = _SCHEDULER.value
 
     config.unlock()
-    config.dataset = dataset_config
+    config.functaset = functaset_config
     config.model = model_config
     config.scheduler = scheduler_config
     config.lock()
@@ -76,10 +76,10 @@ def main(_):
     torch.manual_seed(config.seed)
 
     # create the dataloaders
-    path = Path(os.environ.get("DATA_PATH", "data")) / config.dataset.path
-
+    path = Path(os.environ.get("DATA_PATH", "data")) / config.functaset.path
+    name = config.functaset.name
     train_dataloader = torch.utils.data.DataLoader(
-        h5py_dataloader(path / "train"),
+        h5py_dataloader(path, name=name, split="train"),
         batch_size=config.train.batch_size * jax.device_count(),
         collate_fn=batch_collate,
         shuffle=True,
@@ -87,7 +87,7 @@ def main(_):
     )
 
     val_dataloader = torch.utils.data.DataLoader(
-        h5py_dataloader(path / "val"),
+        h5py_dataloader(path, name=name, split="val"),
         batch_size=config.train.batch_size * jax.device_count() // config.train.num_minibatches,
         collate_fn=batch_collate,
         shuffle=False,
@@ -95,7 +95,7 @@ def main(_):
     )
 
     test_dataloader = torch.utils.data.DataLoader(
-        h5py_dataloader(path / "test"),
+        h5py_dataloader(path, name=name, split="test"),
         batch_size=config.train.batch_size * jax.device_count() // config.train.num_minibatches,
         collate_fn=batch_collate,
         shuffle=False,
@@ -107,13 +107,13 @@ def main(_):
     if config.model.name == "mlp":
         model = MLP(
             hidden_dim=config.model.hidden_dim,
-            num_classes=config.dataset.num_classes,
+            num_classes=config.functaset.num_classes,
             num_layers=config.model.num_layers,
             dropout_prob=config.model.dropout_prob,
         )
     elif config.model.name == "transformer":
         model = VisionTransformer(
-            num_classes=config.dataset.num_classes,
+            num_classes=config.functaset.num_classes,
             embed_dim=config.model.embed_dim,
             hidden_dim=config.model.hidden_dim,
             num_heads=config.model.num_heads,

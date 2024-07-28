@@ -1,3 +1,4 @@
+# export DATA_PATH="/home/papas/project_folder/spatial_functa/functaset"
 import json
 from pathlib import Path
 from typing import Tuple
@@ -27,15 +28,19 @@ _CONFIG = config_flags.DEFINE_config_file(
 _DATASET = config_flags.DEFINE_config_file(
     "dataset", "experiments/downstream/config/dataset.py:cifar10"
 )
-
+_FUNCTASET = config_flags.DEFINE_config_file(
+    "functaset", "experiments/downstream/config/functaset.py"
+)
 
 def load_config_and_store() -> Tuple[ConfigDict, Path]:
     # load the config
     config = _CONFIG.value
     dataset_config = _DATASET.value
+    functaset_config = _FUNCTASET.value
 
     config.unlock()
     config.dataset = dataset_config
+    config.functaset = functaset_config
     config.lock()
     print(config)
 
@@ -138,30 +143,36 @@ def main(_):
 
     field_params = trainer.state.params
     starting_latent_params = trainer.latent_params
-
-    batch_size = config.train.batch_size * jax.device_count() * config.train.num_minibatches
+    functaset_dir = Path(os.environ.get("DATA_PATH", "data")) / Path(config.functaset.path)
+    functaset_dir.mkdir(parents=True, exist_ok=True)
     
-    def make_functaset(loader, name, batch_size):
+    # copy the loaded_config to the functaset_dir
+    with open(functaset_dir / "config.yaml", "w") as fp:
+        json.dump(loaded_config.to_dict(), fp)
 
+    def make_functaset(loader, split):
         wandb.init(
-            project="spatial_functa_create_dataset",
+            project="spatial_functa_create_functaset",
             config=config.to_dict(),
-            name=experiment_dir.name + f"_{name}",
+            name=experiment_dir.name + f"_{split}",
             dir=str(experiment_dir),
         )
-        functabank_size = min(config.functaset.functa_bank_size_per_batch * batch_size, len(loader.dataset))
-        functabank = np.zeros((functabank_size, loaded_config.model.latent_spatial_dim, loaded_config.model.latent_spatial_dim, loaded_config.model.latent_dim))
-        labelbank = np.zeros((functabank_size, 1))
+        functaset_size = len(loader.dataset)
 
-        functabank_idx = 0
-        real_idx = 0
-        prev_idx = 0
-
-        functaset_dir = Path(os.environ.get("DATA_PATH", "data")) / Path(config.functaset.path) / Path(name)
-        functaset_dir.mkdir(parents=True, exist_ok=True)
-
+        with h5py.File(functaset_dir / f"functaset_{config.functaset.name}_{split}.h5", 'w') as f:
+            f.create_dataset(
+                'functaset', 
+                shape=(functaset_size, loaded_config.model.latent_spatial_dim, loaded_config.model.latent_spatial_dim, loaded_config.model.latent_dim),
+                chunks=(1,  loaded_config.model.latent_spatial_dim, loaded_config.model.latent_spatial_dim, loaded_config.model.latent_dim),
+            )
+            f.create_dataset(
+                'labels',
+                shape=(functaset_size, 1),
+            )
+        functaset_idx = 0
+        tqdm_iter = tqdm(enumerate(loader), total=len(loader), desc=f"Creating functaset {split}")
         # loop through the training dataset
-        for i, batch in tqdm(enumerate(loader)):
+        for i, batch in tqdm_iter:
             batch = trainer.process_batch(batch)
             coords = batch.inputs
             target = batch.targets
@@ -173,20 +184,27 @@ def main(_):
             labels = labels.reshape(-1, 1)
 
             num_vectors = latent_vector.shape[0]
+            assert np.any(latent_vector != trainer.get_latent_vector(starting_latent_params)), "Nothing changed in the latent vector"
 
-            functabank[functabank_idx:functabank_idx+num_vectors] = jax.device_get(latent_vector)
-            labelbank[functabank_idx:functabank_idx+num_vectors] = jax.device_get(labels)
+            with h5py.File(functaset_dir / f"functaset_{config.functaset.name}_{split}.h5", 'a') as f:
+                f['functaset'][functaset_idx:functaset_idx+num_vectors] = jax.device_get(latent_vector)
+                f['labels'][functaset_idx:functaset_idx+num_vectors] = jax.device_get(labels)
 
-            functabank_idx += num_vectors
-            real_idx += num_vectors
+            functaset_idx += num_vectors
 
             if i % config.train.log_steps.loss == 0:
                 wandb.log({
                     "loss": loss,
-                    "functabank_idx": functabank_idx,
-                    "real_idx": real_idx,  
+                    "functaset_idx": functaset_idx,
                     "i": i    
                     }, step=i)
+                # print to tqdm
+                tqdm_iter.set_postfix(
+                    {
+                        "loss": loss,
+                        "functaset_idx": functaset_idx,
+                    }
+                )
 
             if i % config.train.log_steps.image == 0:
                 recon = jax.device_get(recon).reshape(-1, *trainer.image_shape)
@@ -201,25 +219,12 @@ def main(_):
                         step=i,
                     )
 
-            if functabank_idx == functabank_size:
-                with h5py.File(functaset_dir / f"functabank_{prev_idx}-{real_idx}.h5", 'w') as f:
-                    f.create_dataset('functabank', data=functabank)
-                    f.create_dataset('labelbank', data=labelbank)
-
-                prev_idx = real_idx
-                functabank_idx = 0
-        
-        if functabank_idx > 0:
-            with h5py.File(functaset_dir / f"functabank_{prev_idx}-{real_idx}.h5", 'w') as f:
-                f.create_dataset('functabank', data=functabank)
-                f.create_dataset('labelbank', data=labelbank)
-        
         wandb.finish()
         
 
-    make_functaset(train_dataloader, "train", batch_size)
-    make_functaset(val_dataloader, "val", batch_size)
-    make_functaset(test_dataloader, "test", batch_size)
+    make_functaset(train_dataloader, "train")
+    make_functaset(val_dataloader, "val")
+    make_functaset(test_dataloader, "test")
 
 
 

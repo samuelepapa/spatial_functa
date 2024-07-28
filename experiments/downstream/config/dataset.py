@@ -14,7 +14,7 @@ DATASET_CONFIGS = {
 }
 
 
-def get_config(name):
+def get_config(name: str = "cifar10") -> config_dict.ConfigDict:
     config = config_dict.ConfigDict()
 
     # Dataset location

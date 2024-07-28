@@ -11,7 +11,7 @@ def get_config():
     config.seed = 0
 
     config.train = ConfigDict()
-    config.train.batch_size = 256
+    config.train.batch_size = 512
     config.train.num_steps = 1e5
     config.train.clip_grads = None
     config.train.weight_decay = 1e-1
@@ -20,7 +20,7 @@ def get_config():
 
     config.train.label_smoothing = True
     config.train.label_smoothing_factor = 0.1
-    config.train.normalizing_factor = 0.01  # divides the latents by this factor
+    config.train.normalizing_factor = 0.08  # divides the latents by this factor
     config.train.clip_grads = None
 
     # Logging

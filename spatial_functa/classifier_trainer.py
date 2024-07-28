@@ -93,11 +93,6 @@ class Trainer:
 
         self.num_steps = int(config.train.num_steps)
 
-        self.image_shape = (
-            config.dataset.resolution,
-            config.dataset.resolution,
-            config.dataset.num_channels,
-        )
         self.log_steps = config.train.log_steps
 
         self.rng = jax.random.PRNGKey(seed)
