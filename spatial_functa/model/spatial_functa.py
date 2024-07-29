@@ -307,7 +307,7 @@ class SIREN(nn.Module):
     def setup(self):
         self.conv_blocks = [
             nn.Conv(
-                self.hidden_dim, 
+                self.modulation_hidden_dim, 
                 (3, 3), 
                 (1, 1), 
                 padding="SAME", 
@@ -327,7 +327,7 @@ class SIREN(nn.Module):
                 shape=(
                     self.latent_spatial_dim,
                     self.latent_spatial_dim,
-                    self.latent_dim,
+                    1, #self.latent_dim,
                 ),
                 lr_init_range=self.lr_init_range,
                 lr_clip_range=self.lr_clip_range,
