@@ -32,7 +32,7 @@ _MODEL = config_flags.DEFINE_config_file(
     "model", "experiments/downstream/config/classifier_model.py:transformer"
 )
 _FUNCTASET = config_flags.DEFINE_config_file(
-    "dataset", "experiments/downstream/config/functaset.py"
+    "functaset", "experiments/downstream/config/functaset.py"
 )
 _SCHEDULER = config_flags.DEFINE_config_file(
     "scheduler", "experiments/downstream/config/scheduler.py:constant"
@@ -84,6 +84,7 @@ def main(_):
         collate_fn=batch_collate,
         shuffle=True,
         drop_last=True,
+        num_workers=config.functaset.num_workers,
     )
 
     val_dataloader = torch.utils.data.DataLoader(
@@ -92,6 +93,7 @@ def main(_):
         collate_fn=batch_collate,
         shuffle=False,
         drop_last=True,
+        num_workers=config.functaset.num_workers,
     )
 
     test_dataloader = torch.utils.data.DataLoader(
@@ -100,6 +102,7 @@ def main(_):
         collate_fn=batch_collate,
         shuffle=False,
         drop_last=True,
+        num_workers=config.functaset.num_workers,
     )
 
 
