@@ -28,7 +28,7 @@ Contents of this README:
 - [Usage](#usage)
     - [Fitting](#fitting)
     - [Downstream tasks](#downstream-tasks)
-- [Experimental results](#experimental-results)
+- [Experimental results](#method-discussion-and-experimental-results)
 
 
 ## Installation
