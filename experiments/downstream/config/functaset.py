@@ -1,4 +1,3 @@
-
 from ml_collections import ConfigDict
 
 FUNCTASET_CONFIGS = {
