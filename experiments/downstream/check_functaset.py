@@ -34,6 +34,8 @@ _FUNCTASET = config_flags.DEFINE_config_file(
     "functaset", "experiments/downstream/config/functaset.py"
 )
 
+DATA_PATH=os.environ.get("DATA_PATH", "data")
+
 from dataloader_functaset import h5py_dataloader, batch_collate
 
 
@@ -62,7 +64,7 @@ def load_config_and_store() -> Tuple[ConfigDict, Path]:
 
 def main(_):
     (config, experiment_dir) = load_config_and_store()
-    functa_model_dir = config.functa_model_dir
+    functa_model_dir = Path(DATA_PATH) / Path(config.functaset.path) 
     with open(Path(functa_model_dir) / "config.yaml", "r") as fp:
         loaded_config = ConfigDict(json.load(fp))
 
@@ -75,12 +77,12 @@ def main(_):
     np.random.seed(config.seed)
     torch.manual_seed(config.seed)
     # torch.backends.cudnn.deterministic = True
-
+    
     # create the dataloaders
     train_dataloader = get_augmented_dataloader(
         dataset_config=config.dataset,
         subset="train",
-        shuffle=False,
+        shuffle=True,
         seed=config.seed,
         batch_size=config.train.batch_size,
         num_minibatches=config.train.num_minibatches,
@@ -103,6 +105,18 @@ def main(_):
         batch_size=config.train.batch_size,
         num_minibatches=config.train.num_minibatches,
     )
+    print(config.dataset)
+    # plot 10 samples from train_dataloader
+    for i, batch in enumerate(train_dataloader):
+        images = batch.targets[:10]
+        fig, axs = plt.subplots(2, 5, figsize=(20, 8))
+        for j, ax in enumerate(axs.flatten()):
+            ax.imshow(images[j])
+            ax.axis("off")
+        plt.savefig("train_samples_1.png")
+        break
+    return
+        
 
     # create the model
     model = SIREN(
@@ -143,12 +157,12 @@ def main(_):
         num_devices=jax.device_count(),
     )
 
-    trainer.load(str(Path((loaded_config.train.checkpointing.checkpoint_dir)/Path("best_psnr")).absolute()))
+    trainer.load(str(Path((functa_model_dir)/ Path("model_checkpoint")).absolute()))
 
     field_params = trainer.state.params
     starting_latent_params = trainer.latent_params
 
-    functaset_dir = Path(os.environ.get("DATA_PATH", "data")) / Path(config.functaset.path)
+    functaset_dir = Path(DATA_PATH) / Path(config.functaset.path)
     functa_dataset = h5py_dataloader(functaset_dir, name=config.functaset.name, split="train")
     functa_dataloader = torch.utils.data.DataLoader(
         functa_dataset,

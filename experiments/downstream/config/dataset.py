@@ -26,7 +26,7 @@ def get_config(name: str = "cifar10") -> config_dict.ConfigDict:
     config.prefetch = False
     config.sampling_mode = "full_image"
     config.num_augmentations = 50
-    config.apply_agument = True
-    config.num_workers = 2
+    config.apply_augment = True
+    config.num_workers = 4
 
     return config

@@ -4,6 +4,8 @@ from pathlib import Path
 from typing import Tuple
 import os
 import h5py
+import shutil
+from distutils.dir_util import copy_tree
 
 import git
 import jax
@@ -149,6 +151,12 @@ def main(_):
     # copy the loaded_config to the functaset_dir
     with open(functaset_dir / "config.yaml", "w") as fp:
         json.dump(loaded_config.to_dict(), fp)
+        
+    # copy the model checkpoint
+    original_checkpoint_dir = Path((loaded_config.train.checkpointing.checkpoint_dir)/Path("best_psnr")).absolute()
+    destination_checkpoint_dir = functaset_dir / "model_checkpoint"
+    destination_checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    copy_tree(str(original_checkpoint_dir), str(destination_checkpoint_dir))
 
     def make_functaset(loader, split):
         wandb.init(
@@ -158,19 +166,19 @@ def main(_):
             dir=str(experiment_dir),
         )
         functaset_size = len(loader.dataset)
-
-        with h5py.File(functaset_dir / f"functaset_{config.functaset.name}_{split}.h5", 'w') as f:
-            f.create_dataset(
+        functaset_file = h5py.File(functaset_dir / f"functaset_{config.functaset.name}_{split}.h5", 'w')
+        functaset_dset = functaset_file.create_dataset(
                 'functaset', 
                 shape=(functaset_size, loaded_config.model.latent_spatial_dim, loaded_config.model.latent_spatial_dim, loaded_config.model.latent_dim),
                 chunks=(1,  loaded_config.model.latent_spatial_dim, loaded_config.model.latent_spatial_dim, loaded_config.model.latent_dim),
             )
-            f.create_dataset(
+        labels_dset = functaset_file.create_dataset(
                 'labels',
                 shape=(functaset_size, 1),
             )
         functaset_idx = 0
         tqdm_iter = tqdm(enumerate(loader), total=len(loader), desc=f"Creating functaset {split}")
+        
         # loop through the training dataset
         for i, batch in tqdm_iter:
             batch = trainer.process_batch(batch)
@@ -184,11 +192,10 @@ def main(_):
             labels = labels.reshape(-1, 1)
 
             num_vectors = latent_vector.shape[0]
-            assert np.any(latent_vector != trainer.get_latent_vector(starting_latent_params)), "Nothing changed in the latent vector"
+            assert np.any(latent_vector != trainer.get_latent_vector(starting_latent_params).reshape(-1, loaded_config.model.latent_spatial_dim, loaded_config.model.latent_spatial_dim, loaded_config.model.latent_dim)), "Nothing changed in the latent vector"
 
-            with h5py.File(functaset_dir / f"functaset_{config.functaset.name}_{split}.h5", 'a') as f:
-                f['functaset'][functaset_idx:functaset_idx+num_vectors] = jax.device_get(latent_vector)
-                f['labels'][functaset_idx:functaset_idx+num_vectors] = jax.device_get(labels)
+            functaset_dset[functaset_idx:functaset_idx+num_vectors] = jax.device_get(latent_vector)
+            labels_dset[functaset_idx:functaset_idx+num_vectors] = jax.device_get(labels)
 
             functaset_idx += num_vectors
 
@@ -201,7 +208,7 @@ def main(_):
                 # print to tqdm
                 tqdm_iter.set_postfix(
                     {
-                        "loss": loss,
+                        "loss": loss.mean(),
                         "functaset_idx": functaset_idx,
                     }
                 )
@@ -218,7 +225,7 @@ def main(_):
                         },
                         step=i,
                     )
-
+        functaset_file.close()
         wandb.finish()
         
 

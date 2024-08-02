@@ -327,7 +327,7 @@ class SIREN(nn.Module):
                 shape=(
                     self.latent_spatial_dim,
                     self.latent_spatial_dim,
-                    1, #self.latent_dim,
+                    self.latent_dim,
                 ),
                 lr_init_range=self.lr_init_range,
                 lr_clip_range=self.lr_clip_range,

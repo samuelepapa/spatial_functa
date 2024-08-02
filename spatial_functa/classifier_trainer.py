@@ -168,6 +168,8 @@ class Trainer:
                 latent_vector,
             )["params"]
         )
+        
+        self.exp_mov_avg_params = params
 
         # setup the learning rate scheduler
         self.lr_schedule = build_lr_scheduler(
@@ -238,7 +240,7 @@ class Trainer:
             latent_vector = batch.inputs
             labels = batch.labels
             logits = jax.device_get(
-                self.val_forward(self.state.params, latent_vector, same_rng_per_device,)
+                self.val_forward(self.exp_mov_avg_params, latent_vector, same_rng_per_device,)
             )
             loss = jnp.mean(
                 optax.softmax_cross_entropy(logits=logits, labels=labels)
@@ -262,6 +264,7 @@ class Trainer:
             },
             step=global_step,
         )
+        logging.info(f"Validation Step {global_step} | Loss {metrics['loss']} | Acc {metrics['acc']}")
 
         if self.checkpointing_config is not None:
             tracked_metric = self.checkpointing_config.get("tracked_metric", None)
@@ -303,6 +306,15 @@ class Trainer:
         self.state = self.state.replace(
             rng=jax.random.split(self.state.rng, self.num_devices)
         )
+        
+    def update_exp_mov_avg_params(self, state):
+        beta = self.trainer_config.get("exp_mov_avg_beta", 0.9999)
+        new_params = jax.tree_util.tree_map(
+            lambda x, y: beta * x + (1 - beta) * y,
+            self.exp_mov_avg_params,
+            state.params,
+        )
+        self.exp_mov_avg_params = new_params
 
     def train(self):
         # print all the shape of the parameters
@@ -322,6 +334,7 @@ class Trainer:
             self.state, metrics, _, self.per_device_rng = self.train_step(
                 self.state, batch, self.per_device_rng
             )
+            self.update_exp_mov_avg_params(self.state)
 
             if self.checkpointing_config is not None and (
                 step % self.checkpointing_config.checkpoint_interval == 0

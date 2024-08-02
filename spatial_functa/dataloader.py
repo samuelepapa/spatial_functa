@@ -4,6 +4,8 @@ from functools import partial
 from pathlib import Path
 from typing import Tuple
 
+import cv2
+
 import git
 import jax
 import jax.numpy as jnp
@@ -87,23 +89,20 @@ def random_h_flip(image, rng: np.random.RandomState):
 def scale_and_random_crop(
     image: np.array,
     rng: np.random.RandomState,
-    pad_w: int,
-    pad_h: int,
-    crop_w: int,
-    crop_h: int,
+    resize_w: int,
+    resize_h: int,
+    final_w: int,
+    final_h: int,
 ):
-    image_h, image_w = image.shape[:2]
-    new_image = np.zeros((pad_h, pad_w, image.shape[-1]), dtype=np.float32)
-    # place image at the center of new_image
-    new_image[
-        (pad_h - image_h) // 2 : (pad_h - image_h) // 2 + image_h,
-        (pad_w - image_w) // 2 : (pad_w - image_w) // 2 + image_w,
-    ] = image
+    # image_h, image_w = image.shape[:2]
+    
+    scaled_image = cv2.resize(image, (resize_w, resize_h), interpolation=cv2.INTER_LINEAR)
+    
     # random crop
-    crop_x = rng.randint(0, pad_w - crop_w)
-    crop_y = rng.randint(0, pad_h - crop_h)
+    crop_x = rng.randint(0, resize_w-final_w)
+    crop_y = rng.randint(0, resize_h-final_h)
 
-    return new_image[crop_y : crop_y + crop_h, crop_x : crop_x + crop_w]
+    return scaled_image[crop_y : crop_y + final_h, crop_x : crop_x + final_w]
 
 
 class ScaleAndRandomCrop:
@@ -153,7 +152,7 @@ def get_augmented_dataloader(
 
     if subset == "train":
         def make_transform(cur_seed):
-            if dataset_config.get("apply_augments", False):
+            if dataset_config.get("apply_augment", False):
                 resolution = dataset_config.resolution
                 resize_resolution = int(resolution * 1.25)
                 return transforms.Compose(
@@ -205,7 +204,7 @@ def get_augmented_dataloader(
         resolution,
         resolution,
         center_pixel=dataset_config.get("center_pixel", True),
-        zero_one=dataset_config.get("zernvid0o_one", True),
+        zero_one=dataset_config.get("zero_one", True),
     )
 
     batch_size = batch_size * jax.device_count()
