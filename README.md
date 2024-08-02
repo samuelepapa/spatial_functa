@@ -1,6 +1,6 @@
 # An unofficial implementation of *spatial functa* 🌌
 
-This is an unofficial implementation of Spatial Functa by ...
+This is an unofficial implementation of Spatial Functa by Samuele Papa. The original paper can be found [here](https://arxiv.org/abs/2302.03130). The original authors are Matthias Bauer, Emilien Dupont, Andy Brock, Dan Rosenbaum, Jonathan Richard Schwarz, and Hyunjik Kim.
 
 *Spatial functa* is an improvement upon *functa*. The authors have released the source code for *functa*, however, not for *spatial functa*. This repository introduces a few fundamental changes (use of `flax` and shared backbone parameters), but tries to match the original *functa* implementation when possible.
 
