@@ -17,3 +17,5 @@ build/
 # local
 outputs/
 visualizations/
+job_scripts/
+data/

@@ -4,3 +4,4 @@ ml_collections
 tqdm
 matplotlib
 wandb
+h5py

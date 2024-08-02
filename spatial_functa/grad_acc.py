@@ -35,7 +35,7 @@ class ClassifierTrainState(TrainState):
 @dataclass
 class Batch:
     inputs: jax.Array
-    targets: jax.Array
+    targets: jax.Array = None
     labels: jax.Array = None
     batch_stats: jax.Array = None
 

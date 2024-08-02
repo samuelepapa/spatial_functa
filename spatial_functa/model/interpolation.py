@@ -71,6 +71,9 @@ if __name__ == "__main__":
     import math
 
     import matplotlib.pyplot as plt
+    from pathlib import Path
+
+    vis_folder = Path("visualizations")
 
     # a test for the interpolation
     # create a feature map
@@ -125,13 +128,13 @@ if __name__ == "__main__":
     # plot the interpolated image
     plt.figure()
     plt.imshow(interpolated.reshape(height, width, 3))
-    plt.savefig("interpolated.png")
+    plt.savefig(vis_folder/"interpolated.png")
 
     plt.figure(figsize=(5, 5))
 
     plt.scatter(coords[:, 0], -coords[:, 1], c=interpolated, s=30)
-    plt.savefig("scatter_interp.png")
+    plt.savefig(vis_folder/"scatter_interp.png")
 
     plt.figure()
     plt.imshow(feature_map)
-    plt.savefig("feature_map.png")
+    plt.savefig(vis_folder/"feature_map.png")

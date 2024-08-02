@@ -29,7 +29,7 @@ from spatial_functa.model.interpolation import interpolate_2d
 from spatial_functa.opt_builder import build_lr_scheduler
 
 Array = jnp.ndarray
-
+Shape = Sequence[int | Any]
 
 class TrainState(train_state.TrainState):
     # Adding rng key for masking
@@ -91,7 +91,7 @@ def custom_uniform(
       the range ``[-range, range)``.
     """
 
-    def init(key: KeyArray, shape: core.Shape, dtype: Any = dtype) -> Any:
+    def init(key: KeyArray, shape: Shape, dtype: Any = dtype) -> Any:
         dtype = dtypes.canonicalize_dtype(dtype)
         named_shape = core.as_named_shape(shape)
         fan_in, fan_out = _compute_fans(named_shape, in_axis, out_axis, batch_axis)
@@ -190,14 +190,14 @@ class MLP(nn.Module):
         for i, size in enumerate(self.layer_sizes[:-1]):
             x = nn.Dense(
                 size,
-                kernel_init=jax.nn.initializers.kaiming_uniform(),
+                kernel_init=jax.nn.initializers.truncated_normal(1/jnp.sqrt(x.shape[-1])),
                 bias_init=jax.nn.initializers.zeros,
                 name=f"mlp_linear_{i}",
             )(x)
             x = self.activation(x)
         return nn.Dense(
             self.layer_sizes[-1],
-            kernel_init=jax.nn.initializers.kaiming_uniform(),
+            kernel_init=jax.nn.initializers.truncated_normal(1/jnp.sqrt(x.shape[-1])),
             bias_init=jax.nn.initializers.zeros,
             name=f"mlp_linear_{len(self.layer_sizes) - 1}",
         )(x)
@@ -306,11 +306,16 @@ class SIREN(nn.Module):
 
     def setup(self):
         self.conv_blocks = [
-            nn.Conv(self.modulation_hidden_dim, (3, 3), (1, 1), padding="SAME"),
+            nn.Conv(
+                self.modulation_hidden_dim, 
+                (3, 3), 
+                (1, 1), 
+                padding="SAME", 
+                kernel_init=nn.initializers.truncated_normal(1/jnp.sqrt(self.latent_spatial_dim*self.latent_spatial_dim*self.latent_dim)))
         ]
         self.latent_to_modulation = LatentToModulation(
             input_dim=self.input_dim if self.latent_spatial_dim > 1 else 1,
-            layer_sizes=[self.modulation_hidden_dim] * self.modulation_num_layers,
+            layer_sizes=[self.hidden_dim] * self.modulation_num_layers,
             num_modulation_layers=self.num_layers - 1,
             modulation_dim=self.hidden_dim,
             scale_modulate=self.scale_modulate,
