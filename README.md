@@ -7,7 +7,13 @@ This is an unofficial implementation of Spatial Functa by ...
 If you use this repository in your paper, please cite the original work and this repository in your work (or in the aknowledgments), using this:
 
 ```
-@misc{spatialFunctaRepo,
+@article{bauer2023spatial,
+  title={Spatial functa: Scaling functa to imagenet classification and generation},
+  author={Bauer, Matthias and Dupont, Emilien and Brock, Andy and Rosenbaum, Dan and Schwarz, Jonathan Richard and Kim, Hyunjik},
+  journal={arXiv preprint arXiv:2302.03130},
+  year={2023}
+}
+@misc{spatialrepo2024papa,
 	author = {Papa, Samuele},
 	title = {Unofficial implementation of spatial functa},
 	howpublished = {\url{https://github.com/samuelepapa/spatial-functa}},
