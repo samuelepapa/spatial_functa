@@ -13,7 +13,7 @@ def get_config():
     config.train = ConfigDict()
     config.train.batch_size = 32
     config.train.num_steps = 2e5
-    config.train.clip_grads = None
+    config.train.clip_grads = 1.
     config.train.num_minibatches = 1
 
     # Meta-learning
