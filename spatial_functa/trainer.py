@@ -78,9 +78,15 @@ def inner_fit(
     coords,
     inner_steps,
     target,
+    clip_grads: Optional[float] = None,
 ) -> Tuple[Array, Array, Array]:
     if "lrs" in field_params.keys():
         opt_inner = optax.scale_by_learning_rate(field_params["lrs"]["lrs"])
+        if clip_grads is not None:
+            opt_inner = optax.chain(
+                optax.clip_by_global_norm(clip_grads),
+                opt_inner,
+            )
         opt_inner_state = opt_inner.init(latent_params)
     else:
         opt_inner_state = opt_inner.init(latent_params)
@@ -147,6 +153,11 @@ class Trainer:
         self.latent_spatial_dim = config.model.latent_spatial_dim
 
         self.inner_opt = optax.sgd(learning_rate=config.train.inner_learning_rate)
+        if self.trainer_config.get("clip_grads", None) is not None:
+            self.inner_opt = optax.chain(
+                optax.clip_by_global_norm(self.trainer_config.clip_grads),
+                self.inner_opt,
+            )
         self.inner_steps = config.train.inner_steps
 
         self.init(config.scheduler, self.rng, example_batch)
@@ -203,7 +214,7 @@ class Trainer:
         self.loss_fn = jax.jit(_loss_fn)
 
     def inner_fit(self, field_params, latent_params, coords, target):
-        return jax.vmap(inner_fit, in_axes=(None, 0, None, None, None, 0, None, 0))(
+        return jax.vmap(inner_fit, in_axes=(None, 0, None, None, None, 0, None, 0, None))(
             field_params,
             latent_params,
             self.model,
@@ -212,6 +223,7 @@ class Trainer:
             coords,
             self.inner_steps,
             target,
+            self.trainer_config.get("clip_grads", None)
         )
 
     def init(self, scheduler_config, rng, example_batch):
