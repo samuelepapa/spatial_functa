@@ -223,7 +223,7 @@ class Trainer:
             coords,
             self.inner_steps,
             target,
-            self.trainer_config.get("clip_grads", None)
+            self.trainer_config.get("inner_clip_grads", None)
         )
 
     def init(self, scheduler_config, rng, example_batch):
@@ -286,9 +286,9 @@ class Trainer:
         outer_optimizer = optax.adam(
             learning_rate=self.lr_schedule,
         )
-        if self.trainer_config.get("clip_grads", None) is not None:
+        if self.trainer_config.get("outer_clip_grads", None) is not None:
             outer_optimizer = optax.chain(
-                optax.clip_by_global_norm(self.trainer_config.clip_grads),
+                optax.clip_by_global_norm(self.trainer_config.outer_clip_grads),
                 outer_optimizer,
             )
 
