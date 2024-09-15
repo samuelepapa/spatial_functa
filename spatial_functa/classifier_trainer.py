@@ -291,7 +291,7 @@ class Trainer:
             self.checkpointer.save(
                 path,
                 self.state.params,
-                ocp.args.StandardSave(self.state.params),
+                # ocp.args.StandardSave(self.state.params), # removed due to orbax update
                 force=True,
             )
 
