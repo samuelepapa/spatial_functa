@@ -13,14 +13,15 @@ def get_config():
     config.train = ConfigDict()
     config.train.batch_size = 32
     config.train.num_steps = 2e5
-    config.train.outer_clip_grads = .1
-    config.train.inner_clip_grads = 1.
+    config.train.outer_clip_grads = None
+    config.train.inner_clip_grads = None
     config.train.num_minibatches = 1
 
     # Meta-learning
     config.train.inner_learning_rate = 1e-2  # only used if learn_lrs is False
     config.train.inner_lr_init_range = (0.005, 0.1)
     config.train.inner_lr_clip_range = (0.0, 1.0)
+    config.train.inner_lr_scaling = 256.0
     config.train.inner_steps = 3
 
 

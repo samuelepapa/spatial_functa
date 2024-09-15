@@ -114,6 +114,8 @@ def main(_):
         learn_lrs=config.model.learn_lrs,
         lr_init_range=config.train.inner_lr_init_range,
         lr_clip_range=config.train.inner_lr_clip_range,
+        lr_scaling=config.train.inner_lr_scaling,
+        lr_shape_type=config.model.lr_shape_type,
         scale_modulate=config.model.scale_modulate,
         shift_modulate=config.model.shift_modulate,
         interpolation_type=config.model.interpolation_type,

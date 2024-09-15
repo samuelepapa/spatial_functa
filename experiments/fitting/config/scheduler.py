@@ -20,6 +20,9 @@ def get_config(scheduler_name: str):
         config.warmup_steps = 1000
         config.end_lr = config_dict.FieldReference(1e-6)
         config.end_value = config.get_ref("end_lr")
+    elif scheduler_name == "warmup_constant":
+        config.lr = 4e-6
+        config.warmup_steps = 1000
     else:
         raise ValueError(f"Unknown scheduler {scheduler_name}")
 

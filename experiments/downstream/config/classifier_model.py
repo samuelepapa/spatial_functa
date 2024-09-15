@@ -15,7 +15,7 @@ def get_config(model_name: str):
         config.embed_dim = 384
         config.hidden_dim = 768
         config.num_heads = 4
-        config.num_layers = 16
+        config.num_layers = 12
         config.dropout_prob = 0.1
         config.num_patches = 4 * 4
     elif model_name == "mlp":

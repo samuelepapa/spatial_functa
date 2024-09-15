@@ -15,6 +15,7 @@ def get_config(model_name: str):
         config.modulation_hidden_dim = 1024
         config.latent_spatial_dim = 1
         config.latent_dim = 512
+        config.lr_shape_type = 'spatial'
         config.learn_lrs = True
         config.scale_modulate = False
         config.shift_modulate = True

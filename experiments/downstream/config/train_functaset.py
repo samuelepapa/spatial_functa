@@ -20,7 +20,7 @@ def get_config():
 
     config.train.label_smoothing = True
     config.train.label_smoothing_factor = 0.1
-    config.train.normalizing_factor = 0.08  # divides the latents by this factor
+    config.train.normalizing_factor = 0.01  # divides the latents by this factor
     config.train.clip_grads = None
     config.train.exp_mov_avg_beta = 0.9999
 
@@ -44,6 +44,6 @@ def get_config():
 
     # Validation
     config.valid = ConfigDict()
-    config.valid.val_interval = 10000 # in number of steps
+    config.valid.val_interval = 500 # in number of steps
 
     return config

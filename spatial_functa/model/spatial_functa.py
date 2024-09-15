@@ -10,6 +10,7 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
+    Literal,
 )
 
 import jax
@@ -133,13 +134,13 @@ class MetaSGDLr(nn.Module):
     shape: Tuple[int, int, int]
     lr_init_range: Tuple[float, float] = (0.0001, 0.001)
     lr_clip_range: Tuple[float, float] = (0.0, 1.0)
+    lr_scaling: float = 256.0
 
     @nn.compact
     def __call__(self) -> Array:
         lrs = self.param(
             "lrs",
             lambda key, shape: jax.random.uniform(
-                # key, shape, jnp.float32, np.log(self.lr_init_range[0]), np.log(self.lr_init_range[1])
                 key,
                 shape,
                 jnp.float32,
@@ -148,8 +149,7 @@ class MetaSGDLr(nn.Module):
             ),
             self.shape,
         )
-        return jax.tree_util.tree_map(lambda x: jnp.clip(x, *self.lr_clip_range), lrs)
-        # return jnp.exp(lrs)
+        return jax.tree_util.tree_map(lambda x: self.lr_scaling*jnp.clip(x, *self.lr_clip_range), lrs)
 
 
 class LatentVector(nn.Module):
@@ -300,6 +300,8 @@ class SIREN(nn.Module):
     learn_lrs: bool = False
     lr_init_range: Tuple[float, float] = (0.0001, 0.001)
     lr_clip_range: Tuple[float, float] = (0.0, 1.0)
+    lr_shape_type: Literal['full', 'spatial', 'constant'] = 'spatial'
+    lr_scaling: float = 256.0
     shift_modulate: bool = True
     scale_modulate: bool = True
     interpolation_type: str = "linear"
@@ -323,14 +325,28 @@ class SIREN(nn.Module):
         )
 
         if self.learn_lrs:
-            self.lrs = MetaSGDLr(
-                shape=(
+            if self.lr_shape_type == 'full':
+                shape = (
                     self.latent_spatial_dim,
                     self.latent_spatial_dim,
                     self.latent_dim,
-                ),
+                )
+            elif self.lr_shape_type == 'spatial':
+                shape = (
+                    self.latent_spatial_dim,
+                    self.latent_spatial_dim,
+                    1,
+                )
+            elif self.lr_shape_type == 'constant':
+                shape = (1,1,1)
+            else:
+                raise ValueError(f"Invalid lr_shape_type: {self.lr_shape_type}, only valid options are full, spatial and constant")
+
+            self.lrs = MetaSGDLr(
+                shape=shape,
                 lr_init_range=self.lr_init_range,
                 lr_clip_range=self.lr_clip_range,
+                lr_scaling=self.lr_scaling,
             )
 
         self.kernel_net = (

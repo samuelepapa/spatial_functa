@@ -13,7 +13,7 @@ def get_config() -> ConfigDict:
     config.experiment_dir = f'outputs/create_functaset_{time.strftime("%Y%m%d-%H%M%S")}_{os.uname().nodename}/'
     # Root folder of the checkpoint, the checkpoint should be in 
     # config.functa_model_dir / ckpts / best_psnr
-    config.functa_model_dir = 'outputs/functa_20240726-181008/'
+    config.functa_model_dir = "/home/papas/project_folder/spatial_functa/spatial_functa_1NN_CIFAR10_4464_outerclip_01_innerclip01/"
 
     # Params used during fitting
     config.train = ConfigDict()
