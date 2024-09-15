@@ -77,7 +77,7 @@ def build_lr_scheduler(scheduler_config: ConfigDict, num_steps: int = 0):
             end_value=scheduler_config.get("end_value", 0.0),
         )
     elif scheduler_name == "warmup_constant":
-        lr_schedule = optax.warmup_constant_schedule(
+        lr_schedule = optax.schedules.warmup_constant_schedule(
             init_value=0.0,
             peak_value=lr,
             warmup_steps=scheduler_config.warmup_steps,

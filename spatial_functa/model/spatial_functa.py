@@ -309,10 +309,12 @@ class SIREN(nn.Module):
         self.conv_blocks = [
             nn.Conv(
                 self.modulation_hidden_dim, 
-                (3, 3), 
-                (1, 1), 
-                padding="SAME", 
-                kernel_init=nn.initializers.truncated_normal(1/jnp.sqrt(self.latent_spatial_dim*self.latent_spatial_dim*self.latent_dim)))
+                (3, 3),
+                (1, 1),
+                padding="SAME",
+                kernel_init=nn.initializers.variance_scaling(1.0, "fan_in", "truncated_normal"),
+            )
+                # kernel_init=nn.initializers.truncated_normal(1/jnp.sqrt(self.latent_spatial_dim*self.latent_spatial_dim*self.latent_dim)))
         ]
         self.latent_to_modulation = LatentToModulation(
             input_dim=self.input_dim if self.latent_spatial_dim > 1 else 1,

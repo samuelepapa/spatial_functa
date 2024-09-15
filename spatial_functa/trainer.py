@@ -81,7 +81,8 @@ def inner_fit(
     clip_grads: Optional[float] = None,
 ) -> Tuple[Array, Array, Array]:
     if "lrs" in field_params.keys():
-        opt_inner = optax.scale_by_learning_rate(field_params["lrs"]["lrs"])
+        lrs = jax.tree_util.tree_map(lambda x: jnp.clip(256*x, 0., 1.), field_params["lrs"]["lrs"])
+        opt_inner = optax.scale_by_learning_rate(lrs)
         if clip_grads is not None:
             opt_inner = optax.chain(
                 optax.clip_by_global_norm(clip_grads),
