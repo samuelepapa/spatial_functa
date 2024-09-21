@@ -34,6 +34,7 @@ _FUNCTASET = config_flags.DEFINE_config_file(
     "functaset", "experiments/downstream/config/functaset.py"
 )
 
+
 def load_config_and_store() -> Tuple[ConfigDict, Path]:
     # load the config
     config = _CONFIG.value
@@ -130,7 +131,6 @@ def main(_):
     example_batch = next(iter(train_dataloader))
     # initialize wandb
 
-
     trainer = Trainer(
         model=model,
         latent_vector_model=latent_vector_model,
@@ -141,19 +141,29 @@ def main(_):
         num_devices=jax.device_count(),
     )
 
-    trainer.load(str(Path((loaded_config.train.checkpointing.checkpoint_dir)/Path("best_psnr")).absolute()))
+    trainer.load(
+        str(
+            Path(
+                (loaded_config.train.checkpointing.checkpoint_dir) / Path("best_psnr")
+            ).absolute()
+        )
+    )
 
     field_params = trainer.state.params
     starting_latent_params = trainer.latent_params
-    functaset_dir = Path(os.environ.get("DATA_PATH", "data")) / Path(config.functaset.path)
+    functaset_dir = Path(os.environ.get("DATA_PATH", "data")) / Path(
+        config.functaset.path
+    )
     functaset_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # copy the loaded_config to the functaset_dir
     with open(functaset_dir / "config.yaml", "w") as fp:
         json.dump(loaded_config.to_dict(), fp)
-        
+
     # copy the model checkpoint
-    original_checkpoint_dir = Path((loaded_config.train.checkpointing.checkpoint_dir)/Path("best_psnr")).absolute()
+    original_checkpoint_dir = Path(
+        (loaded_config.train.checkpointing.checkpoint_dir) / Path("best_psnr")
+    ).absolute()
     destination_checkpoint_dir = functaset_dir / "model_checkpoint"
     destination_checkpoint_dir.mkdir(parents=True, exist_ok=True)
     copy_tree(str(original_checkpoint_dir), str(destination_checkpoint_dir))
@@ -166,45 +176,76 @@ def main(_):
             dir=str(experiment_dir),
         )
         functaset_size = len(loader.dataset)
-        functaset_file = h5py.File(functaset_dir / f"functaset_{config.functaset.name}_{split}.h5", 'w')
+        functaset_file = h5py.File(
+            functaset_dir / f"functaset_{config.functaset.name}_{split}.h5", "w"
+        )
         functaset_dset = functaset_file.create_dataset(
-                'functaset', 
-                shape=(functaset_size, loaded_config.model.latent_spatial_dim, loaded_config.model.latent_spatial_dim, loaded_config.model.latent_dim),
-                chunks=(1,  loaded_config.model.latent_spatial_dim, loaded_config.model.latent_spatial_dim, loaded_config.model.latent_dim),
-            )
+            "functaset",
+            shape=(
+                functaset_size,
+                loaded_config.model.latent_spatial_dim,
+                loaded_config.model.latent_spatial_dim,
+                loaded_config.model.latent_dim,
+            ),
+            chunks=(
+                1,
+                loaded_config.model.latent_spatial_dim,
+                loaded_config.model.latent_spatial_dim,
+                loaded_config.model.latent_dim,
+            ),
+        )
         labels_dset = functaset_file.create_dataset(
-                'labels',
-                shape=(functaset_size, 1),
-            )
+            "labels",
+            shape=(functaset_size, 1),
+        )
         functaset_idx = 0
-        tqdm_iter = tqdm(enumerate(loader), total=len(loader), desc=f"Creating functaset {split}")
-        
+        tqdm_iter = tqdm(
+            enumerate(loader), total=len(loader), desc=f"Creating functaset {split}"
+        )
+
         # loop through the training dataset
         for i, batch in tqdm_iter:
             batch = trainer.process_batch(batch)
             coords = batch.inputs
             target = batch.targets
             labels = batch.labels
-            loss, recon, latent_params = trainer.forward(field_params, starting_latent_params, coords, target)
+            loss, recon, latent_params = trainer.forward(
+                field_params, starting_latent_params, coords, target
+            )
 
             latent_vector = trainer.get_latent_vector(latent_params)
-            latent_vector = latent_vector.reshape(-1, loaded_config.model.latent_spatial_dim, loaded_config.model.latent_spatial_dim, loaded_config.model.latent_dim)
+            latent_vector = latent_vector.reshape(
+                -1,
+                loaded_config.model.latent_spatial_dim,
+                loaded_config.model.latent_spatial_dim,
+                loaded_config.model.latent_dim,
+            )
             labels = labels.reshape(-1, 1)
 
             num_vectors = latent_vector.shape[0]
-            assert np.any(latent_vector != trainer.get_latent_vector(starting_latent_params).reshape(-1, loaded_config.model.latent_spatial_dim, loaded_config.model.latent_spatial_dim, loaded_config.model.latent_dim)), "Nothing changed in the latent vector"
+            assert np.any(
+                latent_vector
+                != trainer.get_latent_vector(starting_latent_params).reshape(
+                    -1,
+                    loaded_config.model.latent_spatial_dim,
+                    loaded_config.model.latent_spatial_dim,
+                    loaded_config.model.latent_dim,
+                )
+            ), "Nothing changed in the latent vector"
 
-            functaset_dset[functaset_idx:functaset_idx+num_vectors] = jax.device_get(latent_vector)
-            labels_dset[functaset_idx:functaset_idx+num_vectors] = jax.device_get(labels)
+            functaset_dset[functaset_idx : functaset_idx + num_vectors] = (
+                jax.device_get(latent_vector)
+            )
+            labels_dset[functaset_idx : functaset_idx + num_vectors] = jax.device_get(
+                labels
+            )
 
             functaset_idx += num_vectors
 
             if i % config.train.log_steps.loss == 0:
-                wandb.log({
-                    "loss": loss,
-                    "functaset_idx": functaset_idx,
-                    "i": i    
-                    }, step=i)
+                wandb.log(
+                    {"loss": loss, "functaset_idx": functaset_idx, "i": i}, step=i
+                )
                 # print to tqdm
                 tqdm_iter.set_postfix(
                     {
@@ -216,7 +257,7 @@ def main(_):
             if i % config.train.log_steps.image == 0:
                 recon = jax.device_get(recon).reshape(-1, *trainer.image_shape)
                 target = jax.device_get(target).reshape(-1, *trainer.image_shape)
-                
+
                 for j in range(min(5, trainer.num_signals_per_device)):
                     wandb.log(
                         {
@@ -227,12 +268,10 @@ def main(_):
                     )
         functaset_file.close()
         wandb.finish()
-        
 
     make_functaset(train_dataloader, "train")
     make_functaset(val_dataloader, "val")
     make_functaset(test_dataloader, "test")
-
 
 
 if __name__ == "__main__":

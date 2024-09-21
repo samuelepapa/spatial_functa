@@ -7,7 +7,9 @@ def get_config():
     config = ConfigDict()
 
     # Experiment directory
-    config.experiment_dir = f'outputs/downstream_functa_{time.strftime("%Y%m%d-%H%M%S")}/'
+    config.experiment_dir = (
+        f'outputs/downstream_functa_{time.strftime("%Y%m%d-%H%M%S")}/'
+    )
     config.seed = 0
 
     config.train = ConfigDict()
@@ -27,23 +29,23 @@ def get_config():
     # Logging
     config.train.log_dir = config.experiment_dir
     config.train.log_steps = ConfigDict()
-    config.train.log_steps.loss =200
+    config.train.log_steps.loss = 200
     config.train.log_steps.image = 2500
 
     # Profiling
     # Set to None and comment the following two lines to disable
-    config.train.profiler = ConfigDict()  
+    config.train.profiler = ConfigDict()
     config.train.profiler.start_step = 200
     config.train.profiler.end_step = 300
 
     # Checkpointing
     config.train.checkpointing = ConfigDict()
     config.train.checkpointing.checkpoint_dir = config.experiment_dir + "ckpts/"
-    config.train.checkpointing.checkpoint_interval = 100000 # in number of steps
+    config.train.checkpointing.checkpoint_interval = 100000  # in number of steps
     config.train.checkpointing.tracked_metric = "acc"
 
     # Validation
     config.valid = ConfigDict()
-    config.valid.val_interval = 500 # in number of steps
+    config.valid.val_interval = 500  # in number of steps
 
     return config

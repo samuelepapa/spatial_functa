@@ -58,11 +58,13 @@ def train_forward(params, model, latent_vector, rng):
     )
     return pred
 
+
 def val_forward(params, model, latent_vector, rng):
     pred = model.apply(
         {"params": params}, latent_vector, train=False, rngs={"dropout": rng}
     )
     return pred
+
 
 class Trainer:
     def __init__(
@@ -114,7 +116,7 @@ class Trainer:
             return jax.vmap(train_forward, in_axes=(None, None, 0, 0))(
                 params, self.model, latent_vector, rngs
             )
-        
+
         def _val_forward(params, latent_vector, rng):
             latent_vector = latent_vector / self.trainer_config.normalizing_factor
             rngs = jax.random.split(rng, latent_vector.shape[0])
@@ -132,9 +134,7 @@ class Trainer:
             labels = batch.labels
             logits = self.train_forward(field_params, latent_vector, rng=rng)
 
-            loss = jnp.mean(
-                optax.softmax_cross_entropy(logits=logits, labels=labels)
-            )
+            loss = jnp.mean(optax.softmax_cross_entropy(logits=logits, labels=labels))
             acc = jnp.mean(jnp.argmax(logits, axis=-1) == jnp.argmax(labels, axis=-1))
 
             loss = jnp.mean(loss)
@@ -168,7 +168,7 @@ class Trainer:
                 latent_vector,
             )["params"]
         )
-        
+
         self.exp_mov_avg_params = params
 
         # setup the learning rate scheduler
@@ -232,7 +232,9 @@ class Trainer:
 
         cur_rng = self.per_device_rng[0]
 
-        same_rng_per_device = jnp.broadcast_to(cur_rng, (self.num_devices,) + cur_rng.shape)
+        same_rng_per_device = jnp.broadcast_to(
+            cur_rng, (self.num_devices,) + cur_rng.shape
+        )
 
         for step in tqdm(range(val_steps), desc="Validation", total=val_steps):
             batch = next(iter_loader)
@@ -240,11 +242,13 @@ class Trainer:
             latent_vector = batch.inputs
             labels = batch.labels
             logits = jax.device_get(
-                self.val_forward(self.exp_mov_avg_params, latent_vector, same_rng_per_device,)
+                self.val_forward(
+                    self.exp_mov_avg_params,
+                    latent_vector,
+                    same_rng_per_device,
+                )
             )
-            loss = jnp.mean(
-                optax.softmax_cross_entropy(logits=logits, labels=labels)
-            )
+            loss = jnp.mean(optax.softmax_cross_entropy(logits=logits, labels=labels))
             acc = jnp.mean(jnp.argmax(logits, axis=-1) == jnp.argmax(labels, axis=-1))
 
             local_metrics = {
@@ -252,7 +256,6 @@ class Trainer:
                 "acc": jax.device_get(acc),
             }
             add_metrics(local_metrics)
-            
 
         for key in ["loss", "acc"]:
             metrics[key] = sum(metrics[key]) / sum(metrics[key + "_batch_size"])
@@ -264,7 +267,9 @@ class Trainer:
             },
             step=global_step,
         )
-        logging.info(f"Validation Step {global_step} | Loss {metrics['loss']} | Acc {metrics['acc']}")
+        logging.info(
+            f"Validation Step {global_step} | Loss {metrics['loss']} | Acc {metrics['acc']}"
+        )
 
         if self.checkpointing_config is not None:
             tracked_metric = self.checkpointing_config.get("tracked_metric", None)
@@ -306,7 +311,7 @@ class Trainer:
         self.state = self.state.replace(
             rng=jax.random.split(self.state.rng, self.num_devices)
         )
-        
+
     def update_exp_mov_avg_params(self, state):
         beta = self.trainer_config.get("exp_mov_avg_beta", 0.9999)
         new_params = jax.tree_util.tree_map(
@@ -369,11 +374,14 @@ class Trainer:
             inputs = batch.inputs.reshape(self.num_devices, num_signals_per_device, -1)
         elif self.model_config.name == "transformer":
             inputs = batch.inputs.reshape(
-                self.num_devices, num_signals_per_device, self.model_config.num_patches, -1
+                self.num_devices,
+                num_signals_per_device,
+                self.model_config.num_patches,
+                -1,
             )
         else:
             raise ValueError(f"Unknown model {self.model_config.name}")
-        
+
         labels = batch.labels.reshape(
             self.num_devices,
             num_signals_per_device,
@@ -389,9 +397,7 @@ class Trainer:
 
     def create_train_step(self):
         def _train_step(state, batch, per_device_rng):
-            _loss_fn = lambda params, batch, rng: self.loss_fn(
-                params, batch, rng
-            )
+            _loss_fn = lambda params, batch, rng: self.loss_fn(params, batch, rng)
 
             per_device_rng, cur_rng = jax.random.split(per_device_rng)
             grads, metrics, visuals = accumulate_gradients(

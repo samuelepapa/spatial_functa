@@ -63,6 +63,7 @@ def load_config_and_store() -> Tuple[ConfigDict, Path]:
 
     return config, experiment_dir
 
+
 def main(_):
     (config, experiment_dir) = load_config_and_store()
 
@@ -89,7 +90,9 @@ def main(_):
 
     val_dataloader = torch.utils.data.DataLoader(
         h5py_dataloader(path, name=name, split="val"),
-        batch_size=config.train.batch_size * jax.device_count() // config.train.num_minibatches,
+        batch_size=config.train.batch_size
+        * jax.device_count()
+        // config.train.num_minibatches,
         collate_fn=batch_collate,
         shuffle=False,
         drop_last=True,
@@ -98,13 +101,14 @@ def main(_):
 
     test_dataloader = torch.utils.data.DataLoader(
         h5py_dataloader(path, name=name, split="test"),
-        batch_size=config.train.batch_size * jax.device_count() // config.train.num_minibatches,
+        batch_size=config.train.batch_size
+        * jax.device_count()
+        // config.train.num_minibatches,
         collate_fn=batch_collate,
         shuffle=False,
         drop_last=True,
         num_workers=config.functaset.num_workers,
     )
-
 
     # create the model
     if config.model.name == "mlp":

@@ -68,38 +68,65 @@ def loss_fn_image(latent_params, field_params, model, latent_model, coords, targ
     return mse_fn(pred, target), pred
 
 
+def inner_step(
+    i,
+    latent_params,
+    field_params,
+    model,
+    latent_model,
+    coords,
+    target,
+    opt_inner,
+    opt_inner_state,
+    inner_lr_scaling,
+):
+    (_, _), grads = jax.value_and_grad(loss_fn_image, has_aux=True)(
+        latent_params, field_params, model, latent_model, coords, target
+    )
+    latent_updates, opt_inner_state = opt_inner.update(grads, opt_inner_state)
+    latent_updates = jax.tree_map(lambda x: x * inner_lr_scaling, latent_updates)
+    latent_params = optax.apply_updates(latent_params, latent_updates)
+    return latent_params
+
+
 @jax.named_scope("inner_fit")
 def inner_fit(
     field_params,
     latent_params,
     model,
     latent_model,
+    lr_model,
     opt_inner: optax.GradientTransformation,
     coords,
     inner_steps,
     target,
+    inner_lr_scaling,
     clip_grads: Optional[float] = None,
 ) -> Tuple[Array, Array, Array]:
     if "lrs" in field_params.keys():
-        lrs = jax.tree_util.tree_map(lambda x: jnp.clip(x, 0., 1.), field_params["lrs"]["lrs"])
-        opt_inner = optax.scale_by_learning_rate(1024.*lrs)
+        lrs = lr_model.apply({"params": field_params["lrs"]})
+        opt_inner = optax.scale_by_learning_rate(lrs)
         if clip_grads is not None:
             opt_inner = optax.chain(
                 optax.clip_by_global_norm(clip_grads),
                 opt_inner,
             )
-        opt_inner_state = opt_inner.init(latent_params)
-    else:
-        opt_inner_state = opt_inner.init(latent_params)
 
-    for _ in range(inner_steps):
-        # run the inner optimization
-        (loss, recon), grads = jax.value_and_grad(loss_fn_image, has_aux=True)(
-            latent_params, field_params, model, latent_model, coords, target
-        )
-        latent_updates, opt_inner_state = opt_inner.update(grads, opt_inner_state)
+    opt_inner_state = opt_inner.init(latent_params)
 
-        latent_params = optax.apply_updates(latent_params, latent_updates)
+    cur_inner_step = partial(
+        inner_step,
+        field_params=field_params,
+        model=model,
+        latent_model=latent_model,
+        coords=coords,
+        target=target,
+        opt_inner=opt_inner,
+        opt_inner_state=opt_inner_state,
+        inner_lr_scaling=inner_lr_scaling,
+    )
+
+    latent_params = jax.lax.fori_loop(0, inner_steps, cur_inner_step, latent_params)
 
     # final loss computation
     loss, recon = loss_fn_image(
@@ -113,6 +140,7 @@ class Trainer:
     def __init__(
         self,
         model,
+        lr_model,
         latent_vector_model,
         example_batch,
         config,
@@ -123,6 +151,8 @@ class Trainer:
         seed = config.get("seed", 42)
         self.model = model
         self.latent_vector_model = latent_vector_model
+        self.lr_model = lr_model
+        self.inner_lr_scaling = config.train.inner_lr_scaling
 
         # data loading
         self.train_loader = train_loader
@@ -215,16 +245,20 @@ class Trainer:
         self.loss_fn = jax.jit(_loss_fn)
 
     def inner_fit(self, field_params, latent_params, coords, target):
-        return jax.vmap(inner_fit, in_axes=(None, 0, None, None, None, 0, None, 0, None))(
+        return jax.vmap(
+            inner_fit, in_axes=(None, 0, None, None, None, None, 0, None, 0, None, None)
+        )(
             field_params,
             latent_params,
             self.model,
             self.latent_vector_model,
+            self.lr_model,
             self.inner_opt,
             coords,
             self.inner_steps,
             target,
-            self.trainer_config.get("inner_clip_grads", None)
+            self.inner_lr_scaling,
+            self.trainer_config.get("inner_clip_grads", None),
         )
 
     def init(self, scheduler_config, rng, example_batch):
@@ -345,7 +379,7 @@ class Trainer:
                 "mse": jnp.mean(jnp.square(recon - target), axis=(1, 2, 3)),
             }
             add_metrics(local_metrics)
-            
+
             if step == 0:
                 plot_target = jax.device_get(target.reshape(-1, *self.image_shape))
 
@@ -529,7 +563,7 @@ class Trainer:
             # grads = jax.tree_util.tree_map(
             #     lambda x: x / self.num_signals_per_device, grads
             # )
-            grads = jax.lax.psum(grads, axis_name="i")
+            grads = jax.lax.pmean(grads, axis_name="i")
 
             metrics = jax.lax.pmean(metrics, axis_name="i")
 

@@ -103,38 +103,49 @@ if __name__ == "__main__":
         x = jnp.concat([x_coord, y_coord], axis=-1)
     else:
         num_bits = int(jnp.ceil(jnp.log2(width)))
+
         def to_binary(arr, num_bits, axis=None, count=None):
-            bits = jnp.asarray(1) << jnp.arange(num_bits, dtype='uint8')
+            bits = jnp.asarray(1) << jnp.arange(num_bits, dtype="uint8")
             if axis is None:
                 arr = jnp.ravel(arr)
                 axis = 0
             arr = jnp.swapaxes(arr, axis, -1)
-            unpacked = ((arr[..., None] & jnp.expand_dims(bits, tuple(range(arr.ndim)))) > 0).astype('uint8')
+            unpacked = (
+                (arr[..., None] & jnp.expand_dims(bits, tuple(range(arr.ndim)))) > 0
+            ).astype("uint8")
             unpacked = unpacked.reshape(unpacked.shape[:-2] + (-1,))
             if count is not None:
                 if count > unpacked.shape[-1]:
-                    unpacked = jnp.pad(unpacked, [(0, 0)] * (unpacked.ndim - 1) + [(0, count - unpacked.shape[-1])])
+                    unpacked = jnp.pad(
+                        unpacked,
+                        [(0, 0)] * (unpacked.ndim - 1)
+                        + [(0, count - unpacked.shape[-1])],
+                    )
                 else:
                     unpacked = unpacked[..., :count]
             return jnp.swapaxes(unpacked, axis, -1)
+
         x_coord_binary = jnp.floor(x_coord * width).astype(jnp.uint16)
         y_coord_binary = jnp.floor(y_coord * height).astype(jnp.uint16)
-        x_coord_binary = to_binary(x_coord_binary, num_bits, axis=1).reshape(-1, num_bits)
-        y_coord_binary = to_binary(y_coord_binary, num_bits, axis=1).reshape(-1, num_bits)
+        x_coord_binary = to_binary(x_coord_binary, num_bits, axis=1).reshape(
+            -1, num_bits
+        )
+        y_coord_binary = to_binary(y_coord_binary, num_bits, axis=1).reshape(
+            -1, num_bits
+        )
         coords_binary = jnp.concatenate([x_coord_binary, y_coord_binary], axis=-1)
         x = coords_binary
-
 
     # plot the interpolated image
     plt.figure()
     plt.imshow(interpolated.reshape(height, width, 3))
-    plt.savefig(vis_folder/"interpolated.png")
+    plt.savefig(vis_folder / "interpolated.png")
 
     plt.figure(figsize=(5, 5))
 
     plt.scatter(coords[:, 0], -coords[:, 1], c=interpolated, s=30)
-    plt.savefig(vis_folder/"scatter_interp.png")
+    plt.savefig(vis_folder / "scatter_interp.png")
 
     plt.figure()
     plt.imshow(feature_map)
-    plt.savefig(vis_folder/"feature_map.png")
+    plt.savefig(vis_folder / "feature_map.png")

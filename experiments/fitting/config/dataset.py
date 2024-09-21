@@ -27,6 +27,6 @@ def get_config(name):
     config.sampling_mode = "full_image"
     config.num_augmentations = 1
     config.apply_agument = False
-    config.num_workers = 2
+    config.num_workers = 0
 
     return config

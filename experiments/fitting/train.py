@@ -9,6 +9,7 @@ import torch
 import wandb
 from absl import app, flags, logging
 from ml_collections import config_dict, config_flags
+from spatial_functa.model.spatial_functa import MetaSGDLr, lr_shape_selection
 from ml_collections.config_dict import ConfigDict
 
 from spatial_functa.dataloader import (
@@ -126,10 +127,20 @@ def main(_):
         latent_spatial_dim=config.model.latent_spatial_dim,
     )
 
+    lr_model = MetaSGDLr(
+        shape=lr_shape_selection(
+            config.model.lr_shape_type,
+            config.model.latent_spatial_dim,
+            config.model.latent_dim,
+        ),
+        lr_init_range=config.train.inner_lr_init_range,
+        lr_clip_range=config.train.inner_lr_clip_range,
+    )
+
     example_batch = next(iter(train_dataloader))
     # initialize wandb
     wandb.init(
-        project="spatial_functa",
+        project=config.train.log_project,
         config=config.to_dict(),
         name=experiment_dir.name,
         dir=str(experiment_dir),
@@ -137,6 +148,7 @@ def main(_):
 
     trainer = Trainer(
         model=model,
+        lr_model=lr_model,
         latent_vector_model=latent_vector_model,
         example_batch=example_batch,
         config=config,

@@ -32,11 +32,14 @@ KeyArray = Array
 
 Shape = Sequence[int | Any]
 
+
 class TrainState(train_state.TrainState):
     # Adding rng key for masking
     rng: Any = None
 
+
 from jax._src.nn.initializers import _compute_fans
+
 # def _compute_fans(
 #     shape: Sequence[int],
 #     in_axis: Union[int, Sequence[int]] = -2,
@@ -133,7 +136,6 @@ class MetaSGDLr(nn.Module):
     shape: Tuple[int, int, int]
     lr_init_range: Tuple[float, float] = (0.0001, 0.001)
     lr_clip_range: Tuple[float, float] = (0.0, 1.0)
-    lr_scaling: float = 256.0
 
     @nn.compact
     def __call__(self) -> Array:
@@ -148,7 +150,7 @@ class MetaSGDLr(nn.Module):
             ),
             self.shape,
         )
-        return jax.tree_util.tree_map(lambda x: self.lr_scaling*jnp.clip(x, *self.lr_clip_range), lrs)
+        return jax.tree_util.tree_map(lambda x: jnp.clip(x, *self.lr_clip_range), lrs)
 
 
 class LatentVector(nn.Module):
@@ -189,14 +191,16 @@ class MLP(nn.Module):
         for i, size in enumerate(self.layer_sizes[:-1]):
             x = nn.Dense(
                 size,
-                kernel_init=jax.nn.initializers.truncated_normal(1/jnp.sqrt(x.shape[-1])),
+                kernel_init=jax.nn.initializers.truncated_normal(
+                    1 / jnp.sqrt(x.shape[-1])
+                ),
                 bias_init=jax.nn.initializers.zeros,
                 name=f"mlp_linear_{i}",
             )(x)
             x = self.activation(x)
         return nn.Dense(
             self.layer_sizes[-1],
-            kernel_init=jax.nn.initializers.truncated_normal(1/jnp.sqrt(x.shape[-1])),
+            kernel_init=jax.nn.initializers.truncated_normal(1 / jnp.sqrt(x.shape[-1])),
             bias_init=jax.nn.initializers.zeros,
             name=f"mlp_linear_{len(self.layer_sizes) - 1}",
         )(x)
@@ -284,6 +288,31 @@ class SirenLayer(nn.Module):
             return after_linear
 
 
+def lr_shape_selection(lr_shape_type, latent_spatial_dim, latent_dim):
+    if lr_shape_type == "full":
+        shape = (
+            latent_spatial_dim,
+            latent_spatial_dim,
+            latent_dim,
+        )
+    elif lr_shape_type == "spatial":
+        shape = (
+            latent_spatial_dim,
+            latent_spatial_dim,
+            1,
+        )
+    elif lr_shape_type == "constant":
+        shape = (1, 1, 1)
+    elif lr_shape_type == "per_coeff":
+        shape = (1, 1, latent_dim)
+    else:
+        raise ValueError(
+            f"Invalid lr_shape_type: {lr_shape_type}, only valid options are full, spatial and constant"
+        )
+
+    return shape
+
+
 class SIREN(nn.Module):
     input_dim: int
     output_dim: int
@@ -299,7 +328,7 @@ class SIREN(nn.Module):
     learn_lrs: bool = False
     lr_init_range: Tuple[float, float] = (0.0001, 0.001)
     lr_clip_range: Tuple[float, float] = (0.0, 1.0)
-    lr_shape_type: Literal['full', 'spatial', 'constant'] = 'spatial'
+    lr_shape_type: Literal["full", "spatial", "constant"] = "spatial"
     lr_scaling: float = 256.0
     shift_modulate: bool = True
     scale_modulate: bool = True
@@ -308,13 +337,12 @@ class SIREN(nn.Module):
     def setup(self):
         self.conv_blocks = [
             nn.Conv(
-                self.modulation_hidden_dim, 
-                (3, 3),
+                self.modulation_hidden_dim,
                 (1, 1),
-                padding="SAME",
-                kernel_init=nn.initializers.variance_scaling(1.0, "fan_in", "truncated_normal"),
+                kernel_init=nn.initializers.variance_scaling(
+                    1.0, "fan_in", "truncated_normal"
+                ),
             )
-                # kernel_init=nn.initializers.truncated_normal(1/jnp.sqrt(self.latent_spatial_dim*self.latent_spatial_dim*self.latent_dim)))
         ]
         self.latent_to_modulation = LatentToModulation(
             input_dim=self.input_dim if self.latent_spatial_dim > 1 else 1,
@@ -326,28 +354,12 @@ class SIREN(nn.Module):
         )
 
         if self.learn_lrs:
-            if self.lr_shape_type == 'full':
-                shape = (
-                    self.latent_spatial_dim,
-                    self.latent_spatial_dim,
-                    self.latent_dim,
-                )
-            elif self.lr_shape_type == 'spatial':
-                shape = (
-                    self.latent_spatial_dim,
-                    self.latent_spatial_dim,
-                    1,
-                )
-            elif self.lr_shape_type == 'constant':
-                shape = (1,1,1)
-            else:
-                raise ValueError(f"Invalid lr_shape_type: {self.lr_shape_type}, only valid options are full, spatial and constant")
-
             self.lrs = MetaSGDLr(
-                shape=shape,
+                shape=lr_shape_selection(
+                    self.lr_shape_type, self.latent_spatial_dim, self.latent_dim
+                ),
                 lr_init_range=self.lr_init_range,
                 lr_clip_range=self.lr_clip_range,
-                lr_scaling=self.lr_scaling,
             )
 
         self.kernel_net = (
@@ -402,25 +414,44 @@ class SIREN(nn.Module):
                 x_coord, y_coord = jnp.split(x, 2, axis=-1)
                 resolution = max(self.image_width, self.image_height)
                 num_bits = int(math.ceil(math.log2(resolution)))
+
                 def to_binary(arr, num_bits, axis=None, count=None):
-                    bits = jnp.asarray(1) << jnp.arange(num_bits, dtype='uint8')
+                    bits = jnp.asarray(1) << jnp.arange(num_bits, dtype="uint8")
                     if axis is None:
                         arr = jnp.ravel(arr)
                         axis = 0
                     arr = jnp.swapaxes(arr, axis, -1)
-                    unpacked = ((arr[..., None] & jnp.expand_dims(bits, tuple(range(arr.ndim)))) > 0).astype('uint8')
+                    unpacked = (
+                        (arr[..., None] & jnp.expand_dims(bits, tuple(range(arr.ndim))))
+                        > 0
+                    ).astype("uint8")
                     unpacked = unpacked.reshape(unpacked.shape[:-2] + (-1,))
                     if count is not None:
                         if count > unpacked.shape[-1]:
-                            unpacked = jnp.pad(unpacked, [(0, 0)] * (unpacked.ndim - 1) + [(0, count - unpacked.shape[-1])])
+                            unpacked = jnp.pad(
+                                unpacked,
+                                [(0, 0)] * (unpacked.ndim - 1)
+                                + [(0, count - unpacked.shape[-1])],
+                            )
                         else:
                             unpacked = unpacked[..., :count]
                     return jnp.swapaxes(unpacked, axis, -1)
-                x_coord_binary = jnp.floor(x_coord * self.image_width).astype(jnp.uint16)
-                y_coord_binary = jnp.floor(y_coord * self.image_height).astype(jnp.uint16)
-                x_coord_binary = to_binary(x_coord_binary, num_bits, axis=1).reshape(-1, num_bits)
-                y_coord_binary = to_binary(y_coord_binary, num_bits, axis=1).reshape(-1, num_bits)
-                coords_binary = jnp.concatenate([x_coord_binary, y_coord_binary], axis=-1)
+
+                x_coord_binary = jnp.floor(x_coord * self.image_width).astype(
+                    jnp.uint16
+                )
+                y_coord_binary = jnp.floor(y_coord * self.image_height).astype(
+                    jnp.uint16
+                )
+                x_coord_binary = to_binary(x_coord_binary, num_bits, axis=1).reshape(
+                    -1, num_bits
+                )
+                y_coord_binary = to_binary(y_coord_binary, num_bits, axis=1).reshape(
+                    -1, num_bits
+                )
+                coords_binary = jnp.concatenate(
+                    [x_coord_binary, y_coord_binary], axis=-1
+                )
                 x = coords_binary
 
         else:

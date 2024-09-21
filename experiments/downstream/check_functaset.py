@@ -34,7 +34,7 @@ _FUNCTASET = config_flags.DEFINE_config_file(
     "functaset", "experiments/downstream/config/functaset.py"
 )
 
-DATA_PATH=os.environ.get("DATA_PATH", "data")
+DATA_PATH = os.environ.get("DATA_PATH", "data")
 
 from dataloader_functaset import h5py_dataloader, batch_collate
 
@@ -64,7 +64,7 @@ def load_config_and_store() -> Tuple[ConfigDict, Path]:
 
 def main(_):
     (config, experiment_dir) = load_config_and_store()
-    functa_model_dir = Path(DATA_PATH) / Path(config.functaset.path) 
+    functa_model_dir = Path(DATA_PATH) / Path(config.functaset.path)
     with open(Path(functa_model_dir) / "config.yaml", "r") as fp:
         loaded_config = ConfigDict(json.load(fp))
 
@@ -77,7 +77,7 @@ def main(_):
     np.random.seed(config.seed)
     torch.manual_seed(config.seed)
     # torch.backends.cudnn.deterministic = True
-    
+
     # create the dataloaders
     train_dataloader = get_augmented_dataloader(
         dataset_config=config.dataset,
@@ -116,7 +116,6 @@ def main(_):
         plt.savefig("train_samples_1.png")
         break
     return
-        
 
     # create the model
     model = SIREN(
@@ -157,13 +156,15 @@ def main(_):
         num_devices=jax.device_count(),
     )
 
-    trainer.load(str(Path((functa_model_dir)/ Path("model_checkpoint")).absolute()))
+    trainer.load(str(Path((functa_model_dir) / Path("model_checkpoint")).absolute()))
 
     field_params = trainer.state.params
     starting_latent_params = trainer.latent_params
 
     functaset_dir = Path(DATA_PATH) / Path(config.functaset.path)
-    functa_dataset = h5py_dataloader(functaset_dir, name=config.functaset.name, split="train")
+    functa_dataset = h5py_dataloader(
+        functaset_dir, name=config.functaset.name, split="train"
+    )
     functa_dataloader = torch.utils.data.DataLoader(
         functa_dataset,
         batch_size=8,
@@ -181,20 +182,18 @@ def main(_):
             config.dataset.resolution,
             center_pixel=config.dataset.get("center_pixel", True),
             zero_one=config.dataset.get("zero_one", True),
-        ).reshape(-1,2)
+        ).reshape(-1, 2)
         coords = coords
-        
+
         print(latent_vector.shape, coords.shape)
 
-        pred = trainer.model.apply(
-            {"params": field_params}, coords, latent_vector[0]
-        )
-        plt.imshow(jax.device_get(pred.reshape(32,32, 3)))
+        pred = trainer.model.apply({"params": field_params}, coords, latent_vector[0])
+        plt.imshow(jax.device_get(pred.reshape(32, 32, 3)))
         plt.savefig("test.png")
         break
 
     # batch_size = config.train.batch_size * jax.device_count() * config.train.num_minibatches
-    
+
     # def make_functaset(loader, name, batch_size):
 
     #     wandb.init(
@@ -238,14 +237,14 @@ def main(_):
     #             wandb.log({
     #                 "loss": loss,
     #                 "functabank_idx": functabank_idx,
-    #                 "real_idx": real_idx,  
-    #                 "i": i    
+    #                 "real_idx": real_idx,
+    #                 "i": i
     #                 }, step=i)
 
     #         if i % config.train.log_steps.image == 0:
     #             recon = jax.device_get(recon).reshape(-1, *trainer.image_shape)
     #             target = jax.device_get(target).reshape(-1, *trainer.image_shape)
-                
+
     #             for j in range(min(5, trainer.num_signals_per_device)):
     #                 wandb.log(
     #                     {
@@ -262,19 +261,17 @@ def main(_):
 
     #             prev_idx = real_idx
     #             functabank_idx = 0
-        
+
     #     if functabank_idx > 0:
     #         with h5py.File(functaset_dir / f"functabank_{prev_idx}-{real_idx}.h5", 'w') as f:
     #             f.create_dataset('functabank', data=functabank)
     #             f.create_dataset('labelbank', data=labelbank)
-        
+
     #     wandb.finish()
-        
 
     # make_functaset(train_dataloader, "train", batch_size)
     # make_functaset(val_dataloader, "val", batch_size)
     # make_functaset(test_dataloader, "test", batch_size)
-
 
 
 if __name__ == "__main__":

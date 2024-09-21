@@ -48,7 +48,10 @@ def get_coords(height, width, center_pixel=True, zero_one=True):
 
 
 def image_to_numpy(image):
-    return np.array(image, dtype=np.float32) / 255.0
+    image = np.array(image, dtype=np.float32) / 255.0
+    if len(image.shape) == 2:
+        image = np.expand_dims(image, axis=-1)
+    return image
 
 
 def normalize(image, mean: np.array, std: np.array):
@@ -95,12 +98,14 @@ def scale_and_random_crop(
     final_h: int,
 ):
     # image_h, image_w = image.shape[:2]
-    
-    scaled_image = cv2.resize(image, (resize_w, resize_h), interpolation=cv2.INTER_LINEAR)
-    
+
+    scaled_image = cv2.resize(
+        image, (resize_w, resize_h), interpolation=cv2.INTER_LINEAR
+    )
+
     # random crop
-    crop_x = rng.randint(0, resize_w-final_w)
-    crop_y = rng.randint(0, resize_h-final_h)
+    crop_x = rng.randint(0, resize_w - final_w)
+    crop_y = rng.randint(0, resize_h - final_h)
 
     return scaled_image[crop_y : crop_y + final_h, crop_x : crop_x + final_w]
 
@@ -151,6 +156,7 @@ def get_augmented_dataloader(
     num_augmentations = int(dataset_config.get("num_augmentations", 1))
 
     if subset == "train":
+
         def make_transform(cur_seed):
             if dataset_config.get("apply_augment", False):
                 resolution = dataset_config.resolution
@@ -159,7 +165,13 @@ def get_augmented_dataloader(
                     [
                         image_to_numpy,
                         RandomHorizontalFlip(cur_seed),
-                        ScaleAndRandomCrop(resize_resolution, resize_resolution, resolution, resolution, cur_seed),
+                        ScaleAndRandomCrop(
+                            resize_resolution,
+                            resize_resolution,
+                            resolution,
+                            resolution,
+                            cur_seed,
+                        ),
                     ]
                 )
             else:
