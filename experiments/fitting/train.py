@@ -128,7 +128,7 @@ def main(_):
     )
 
     lr_model = MetaSGDLr(
-        shape=lr_shape_selection(
+        shape= lr_shape_selection(
             config.model.lr_shape_type,
             config.model.latent_spatial_dim,
             config.model.latent_dim,

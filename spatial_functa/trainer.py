@@ -440,7 +440,7 @@ class Trainer:
     def load(self, path):
         self.state = self.state.replace(
             params=self.checkpointer.restore(
-                path, ocp.args.StandardRestore(self.state.params)
+                path, self.state.params
             )
         )
 

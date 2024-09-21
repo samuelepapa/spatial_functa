@@ -15,6 +15,7 @@ import wandb
 from tqdm import tqdm
 from absl import app, flags, logging
 from ml_collections import config_dict, config_flags
+from spatial_functa.model.spatial_functa import MetaSGDLr, lr_shape_selection
 from ml_collections.config_dict import ConfigDict
 
 from spatial_functa.dataloader import (
@@ -63,6 +64,9 @@ def main(_):
     functa_model_dir = config.functa_model_dir
     with open(Path(functa_model_dir) / "config.yaml", "r") as fp:
         loaded_config = ConfigDict(json.load(fp))
+        
+    logging.info(f"Loaded config from {functa_model_dir}")
+    logging.info(loaded_config)
 
     # throw warning if the git repository has not been commited
     repo = git.Repo(search_parent_directories=True)
@@ -121,11 +125,23 @@ def main(_):
         scale_modulate=loaded_config.model.scale_modulate,
         shift_modulate=loaded_config.model.shift_modulate,
         interpolation_type=loaded_config.model.interpolation_type,
+        lr_shape_type=loaded_config.model.lr_shape_type,
+        lr_scaling=loaded_config.train.inner_lr_scaling,
     )
 
     latent_vector_model = LatentVector(
         latent_dim=loaded_config.model.latent_dim,
         latent_spatial_dim=loaded_config.model.latent_spatial_dim,
+    )
+    
+    lr_model = MetaSGDLr(
+        shape=lr_shape_selection(
+            loaded_config.model.lr_shape_type,
+            loaded_config.model.latent_spatial_dim,
+            loaded_config.model.latent_dim,
+        ),
+        lr_init_range=loaded_config.train.inner_lr_init_range,
+        lr_clip_range=loaded_config.train.inner_lr_clip_range,
     )
 
     example_batch = next(iter(train_dataloader))
@@ -133,6 +149,7 @@ def main(_):
 
     trainer = Trainer(
         model=model,
+        lr_model=lr_model,
         latent_vector_model=latent_vector_model,
         example_batch=example_batch,
         config=loaded_config,

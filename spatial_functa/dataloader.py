@@ -102,6 +102,9 @@ def scale_and_random_crop(
     scaled_image = cv2.resize(
         image, (resize_w, resize_h), interpolation=cv2.INTER_LINEAR
     )
+    
+    if len(scaled_image.shape) == 2:
+        scaled_image = np.expand_dims(scaled_image, axis=-1)
 
     # random crop
     crop_x = rng.randint(0, resize_w - final_w)

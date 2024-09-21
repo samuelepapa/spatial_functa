@@ -4,6 +4,9 @@ FUNCTASET_CONFIGS = {
     "cifar10": {
         "num_classes": 10,
     },
+    "mnist": {
+        "num_classes": 10,
+    }
 }
 
 
