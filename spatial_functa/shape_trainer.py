@@ -57,10 +57,17 @@ def forward(latent_params, field_params, model, latent_model, coords):
         {"params": latent_params},
     )
     pred = model.apply({"params": field_params}, coords, latent_vector)
-    return pred
+    return pred - 0.5
 
 
 mse_fn = jax.jit(lambda x, y: jnp.mean(jnp.square(x - y)))
+
+def iou(pred, target):
+    pred = jnp.where(pred < 0, 1, 0)
+    target = jnp.where(target < 0, 1, 0)
+    intersection = jnp.sum(pred * target, axis=(-1,-2))
+    union = jnp.sum(pred, axis=(-1,-2)) + jnp.sum(target, axis=(-1,-2)) - intersection
+    return intersection / union
 
 
 def loss_fn_image(latent_params, field_params, model, latent_model, coords, target):
@@ -81,7 +88,7 @@ def inner_step(
     inner_lr_scaling,
 ):
     (_, _), grads = jax.value_and_grad(loss_fn_image, has_aux=True)(
-        latent_params, field_params, model, latent_model, coords, target
+        latent_params, field_params, model, latent_model, coords[i], target[i]
     )
     latent_updates, opt_inner_state = opt_inner.update(grads, opt_inner_state)
     latent_updates = jax.tree_map(lambda x: x * inner_lr_scaling, latent_updates)
@@ -113,7 +120,7 @@ def inner_fit(
             )
 
     opt_inner_state = opt_inner.init(latent_params)
-
+    
     cur_inner_step = partial(
         inner_step,
         field_params=field_params,
@@ -130,13 +137,13 @@ def inner_fit(
 
     # final loss computation
     loss, recon = loss_fn_image(
-        latent_params, field_params, model, latent_model, coords, target
+        latent_params, field_params, model, latent_model, coords[-1], target[-1]
     )
 
     return loss, recon, latent_params
 
 
-class Trainer:
+class ShapeTrainer:
     def __init__(
         self,
         model,
@@ -163,15 +170,30 @@ class Trainer:
         self.trainer_config = config.train
         self.val_config = config.valid
         self.num_minibatches = self.trainer_config.get("num_minibatches", 1)
-
+        
+        # number of points to sample per signal
+        self.num_points = config.dataset.resolution
+        # create a loop of random indices
+        total_points = config.dataset.total_points
+        # create 100 permutations of the indices
+        num_permutations = 100 * config.train.inner_steps
+        permutations = np.concatenate([
+            np.random.permutation(total_points) for _ in range(num_permutations)
+        ])
+        available_points = total_points * num_permutations
+        available_points = available_points - (available_points % self.num_points)
+        
+        # reshape the permutations to have indices for each signal
+        self.indices = permutations[:available_points].reshape(-1, config.train.inner_steps, self.num_points)
+        self.batch_idx = 0
+        self.num_batches = self.indices.shape[0]
         # checkpointing
         self.checkpointing_config = config.train.checkpointing
         self.checkpointer = ocp.StandardCheckpointer()
 
         self.num_steps = int(config.train.num_steps)
 
-        self.image_shape = (
-            config.dataset.resolution,
+        self.sdf_shape = (
             config.dataset.resolution,
             config.dataset.num_channels,
         )
@@ -228,18 +250,18 @@ class Trainer:
                 field_params, latent_params, coords, target
             )
             loss = jnp.mean(loss)
-            cur_mse = jnp.mean(jnp.square(recon - target), axis=(-1, -2))
-            cur_psnr = (-10 * jnp.log10(cur_mse)).mean()
+            cur_mse = jnp.mean(jnp.square(recon - target[:,-1]), axis=(-1, -2))
             cur_mse = cur_mse.mean()
+            cur_iou = iou(recon, target[:,-1]).mean()
 
             metrics = {
                 "loss": loss,
                 "mse": cur_mse,
-                "psnr": cur_psnr,
+                "iou": cur_iou,
             }
             visuals = {
                 "recon": recon,
-                "target": target,
+                "target": target[-1],
             }
             return loss, (metrics, visuals)
 
@@ -342,10 +364,10 @@ class Trainer:
 
     def validate(self, global_step):
         metrics = {
-            "psnr": [],
             "mse": [],
-            "psnr_batch_size": [],
             "mse_batch_size": [],
+            "iou": [],
+            "iou_batch_size": [],
         }
 
         def add_metrics(new_metrics):
@@ -373,38 +395,24 @@ class Trainer:
             recon = jax.device_get(
                 self.forward(self.state.params, self.latent_params, coords, target)[1]
             )
-            recon = recon.reshape(-1, *self.image_shape)
-            target = target.reshape(-1, *self.image_shape)
+            recon = recon.reshape(-1, *self.sdf_shape)
+            target = target[:,:,-1].reshape(-1, *self.sdf_shape)
             local_metrics = {
-                "psnr": psnr(recon, target),
-                "mse": jnp.mean(jnp.square(recon - target), axis=(1, 2, 3)),
+                "mse": jnp.mean(jnp.square(recon - target), axis=(1, 2)),
+                "iou": iou(recon, target),
             }
             add_metrics(local_metrics)
 
             if step == 0:
-                plot_target = jax.device_get(target.reshape(-1, *self.image_shape))
+                plot_target = jax.device_get(target.reshape(-1, *self.sdf_shape))
 
-                for i in range(min(5, self.num_signals_per_device)):
-                    wandb.log(
-                        {
-                            f"val_images/recon_{i}": wandb.Image(recon[i]),
-                            f"val_images/target_{i}": wandb.Image(plot_target[i]),
-                            "val_images/recon_distribution": wandb.Histogram(
-                                recon[i].flatten()
-                            ),
-                            "val_images/target_distribution": wandb.Histogram(
-                                plot_target[i].flatten()
-                            ),
-                        },
-                        step=global_step,
-                    )
-        for key in ["psnr", "mse"]:
+        for key in ["mse", "iou"]:
             metrics[key] = sum(metrics[key]) / sum(metrics[key + "_batch_size"])
 
         wandb.log(
             {
-                "val_metrics/psnr": metrics["psnr"],
                 "val_metrics/mse": metrics["mse"],
+                "val_metrics/iou": metrics["iou"],
             },
             step=global_step,
         )
@@ -480,7 +488,7 @@ class Trainer:
                     {
                         "train_metrics/loss": metrics["loss"],
                         "train_metrics/mse": metrics["mse"],
-                        "train_metrics/psnr": metrics["psnr"],
+                        "train_metrics/iou": metrics["iou"],
                         "train_metrics/learning_rate": learning_rate,
                     },
                     step=step,
@@ -503,33 +511,12 @@ class Trainer:
             if step % self.log_steps.image == 0 or (step == self.num_steps - 1):
                 # evaluate the mdoel
                 recon = jax.device_get(
-                    visuals["recon"][0].reshape(-1, *self.image_shape)
+                    visuals["recon"][0].reshape(-1, *self.sdf_shape)
                 )
                 plot_target = jax.device_get(
-                    batch.targets.reshape(-1, *self.image_shape)
+                    batch.targets.reshape(-1, *self.sdf_shape)
                 )
-
-                for i in range(min(5, self.num_signals_per_device)):
-                    # get from device jax
-                    wandb.log(
-                        {
-                            f"train_images/recon_{i}": wandb.Image(recon[i]),
-                            f"train_images/target_{i}": wandb.Image(plot_target[i]),
-                        },
-                        step=step,
-                    )
-                    # log the image statistics
-                    wandb.log(
-                        {
-                            "train_images/recon_distribution": wandb.Histogram(
-                                recon[i].flatten()
-                            ),
-                            "train_images/target_distribution": wandb.Histogram(
-                                plot_target[i].flatten()
-                            ),
-                        },
-                        step=step,
-                    )
+                
 
     def process_batch(self, batch: Batch):
         # extract necessary information from inputs (coords) and target (image)
@@ -546,6 +533,14 @@ class Trainer:
             self.num_devices,
             num_signals_per_device,
         )
+        
+        batch_idxs = self.indices[self.batch_idx % self.num_batches]
+        batch_idxs = batch_idxs.flatten()
+        inputs = inputs[:, :, batch_idxs].reshape(self.num_devices, num_signals_per_device, self.inner_steps, -1, self.coords_dim)
+        targets = targets[:, :, batch_idxs].reshape(self.num_devices, num_signals_per_device, self.inner_steps, -1, num_channels)
+                
+        self.batch_idx += 1
+
         return dataclasses.replace(batch, inputs=inputs, targets=targets, labels=labels)
 
     def create_train_step(self):

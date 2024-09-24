@@ -17,6 +17,7 @@ from spatial_functa.dataloader import (
 )
 from spatial_functa import SIREN, LatentVector
 from spatial_functa.trainer import Trainer
+from spatial_functa.shape_trainer import ShapeTrainer
 
 
 _CONFIG = config_flags.DEFINE_config_file(
@@ -92,7 +93,7 @@ def main(_):
 
     test_dataloader = get_augmented_dataloader(
         dataset_config=config.dataset,
-        subset="test",
+        subset="val",
         shuffle=False,
         seed=config.seed,
         batch_size=config.train.batch_size,
@@ -146,16 +147,28 @@ def main(_):
         dir=str(experiment_dir),
     )
 
-    trainer = Trainer(
-        model=model,
-        lr_model=lr_model,
-        latent_vector_model=latent_vector_model,
-        example_batch=example_batch,
-        config=config,
-        train_loader=train_dataloader,
-        val_loader=val_dataloader,
-        num_devices=jax.device_count(),
-    )
+    if config.dataset.data_type == "image":
+        trainer = Trainer(
+            model=model,
+            example_batch=example_batch,
+            config=config,
+            train_loader=train_dataloader,
+            val_loader=val_dataloader,
+            num_devices=jax.device_count(),
+            lr_model=lr_model,
+            latent_vector_model=latent_vector_model,
+        )
+    elif config.dataset.data_type == "sdf":
+        trainer = ShapeTrainer(
+            model=model,
+            example_batch=example_batch,
+            config=config,
+            train_loader=train_dataloader,
+            val_loader=val_dataloader,
+            num_devices=jax.device_count(),
+            lr_model=lr_model,
+            latent_vector_model=latent_vector_model,
+        )
 
     trainer.train()
 

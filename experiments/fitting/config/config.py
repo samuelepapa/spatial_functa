@@ -7,7 +7,7 @@ def get_config():
     config = ConfigDict()
 
     # Experiment directory
-    config.experiment_dir = f'outputs/functa_{time.strftime("%Y%m%d-%H%M%S")}/'
+    config.experiment_dir = f'outputs/functa_shapenet_{time.strftime("%Y%m%d-%H%M%S")}/'
     config.seed = 0
 
     config.train = ConfigDict()
@@ -41,7 +41,7 @@ def get_config():
     config.train.checkpointing = ConfigDict()
     config.train.checkpointing.checkpoint_dir = config.experiment_dir + "ckpts/"
     config.train.checkpointing.checkpoint_interval = 2500  # in number of steps
-    config.train.checkpointing.tracked_metric = "psnr"
+    config.train.checkpointing.tracked_metric = "mse"
 
     # Validation
     config.valid = ConfigDict()

@@ -14,7 +14,7 @@ def get_config():
 
     config.train = ConfigDict()
     config.train.batch_size = 512
-    config.train.num_steps = 3e5
+    config.train.num_steps = 1e5
     config.train.clip_grads = None
     config.train.weight_decay = 1e-1
     config.train.num_minibatches = 1

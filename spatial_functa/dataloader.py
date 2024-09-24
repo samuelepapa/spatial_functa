@@ -19,6 +19,8 @@ from torchvision import transforms
 
 from spatial_functa.grad_acc import Batch
 
+import h5py
+
 DATA_PATH = os.environ.get("DATA_PATH", "data")
 
 
@@ -134,8 +136,7 @@ class RandomHorizontalFlip:
     def __call__(self, image):
         return random_h_flip(image, self.rng)
 
-
-def get_augmented_dataloader(
+def get_image_dataloader(
     dataset_config: ConfigDict,
     subset: str,
     batch_size: int,
@@ -241,3 +242,152 @@ def get_augmented_dataloader(
         num_workers=dataset_config.get("num_workers", 12),
     )
     return dataloader
+
+def get_augmented_dataloader(
+    dataset_config: ConfigDict,
+    subset: str,
+    batch_size: int,
+    shuffle: bool,
+    seed: int,
+    num_minibatches: int = 1,
+):
+    dataset_name = dataset_config.name
+    if dataset_name in ["cifar10", "mnist"]:
+        return get_image_dataloader(
+            dataset_config, subset, batch_size, shuffle, seed, num_minibatches
+        )
+    elif dataset_name == "shapenet":
+        return get_shapenet_dataloader(
+            dataset_config, subset, batch_size, shuffle, seed, num_minibatches
+        )
+    else:
+        raise ValueError(f"Unknown dataset {dataset_name}, only cifar10, mnist, shapenet supported")
+
+def get_shapenet_dataloader(
+    dataset_config: ConfigDict,
+    subset: str,
+    batch_size: int,
+    shuffle: bool,
+    seed: int,
+    num_minibatches: int = 1,
+):
+    dataset_name = dataset_config.name
+    if dataset_name == "shapenet":
+        DatasetClass = ShapeNetSDFH5
+    else:
+        raise ValueError(f"Unknown dataset {dataset_name}")
+
+    if subset == "train":
+        dataset = DatasetClass(
+            DATA_PATH,
+            seed=seed,
+            debug=dataset_config.get("debug", False),
+            train=True,
+        )
+    elif subset == "val":
+        dataset = DatasetClass(
+            DATA_PATH,
+            seed=seed,
+            debug=dataset_config.get("debug", False),
+            train=False,
+        )
+    elif subset == "test":
+        dataset = DatasetClass(
+            DATA_PATH,
+            seed=seed,
+            debug=dataset_config.get("debug", False),
+            train=False,
+        )
+
+    logging.info(f"Using {len(dataset)} samples for {subset}")
+
+    batch_size = batch_size * jax.device_count()
+    if subset != "train":
+        batch_size = batch_size // num_minibatches
+
+    def batch_collate(batch):
+        batch_list = numpy_collate(batch)
+        batch_list[1] = np.expand_dims(batch_list[1], axis=-1)
+        return Batch(inputs=batch_list[0], targets=batch_list[1], labels=batch_list[2])
+
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        collate_fn=batch_collate,
+        drop_last=True,
+        num_workers=dataset_config.get("num_workers", 12),
+    )
+    return dataloader
+
+class ShapeNetSDFH5(torch.utils.data.Dataset):
+    def __init__(
+        self,
+        root: str,
+        seed: int = 42,
+        debug: bool = False,
+        train: bool = True,
+    ):
+        self.root = root
+        self.debug = debug
+        if train:
+            self.file_path = os.path.join(self.root, "shapenet_train.h5")
+        else:
+            self.file_path = os.path.join(self.root, "shapenet_test.h5")
+
+        self.data = h5py.File(self.file_path, "r")
+        self.num_signals = self.data["indices"].shape[0]
+        self.points_per_signal = self.data["points"].shape[0] // self.num_signals
+        self.total_num_points = self.data["points"].shape[0]
+        if self.debug:
+            if train:
+                self.num_signals = 256
+            else:
+                self.num_signals = 64
+            self.points = self.data["points"][:self.num_signals*self.points_per_signal]
+            self.sdf = self.data["sdf"][:self.num_signals*self.points_per_signal]
+        else:
+            self.points = self.data["points"][:]
+            self.sdf = self.data["sdf"][:]
+        self.points = self.points.astype(np.float32).reshape(
+            self.num_signals, self.points_per_signal, 3
+        )
+        self.sdf = self.sdf.astype(np.float32).reshape(
+            self.num_signals, self.points_per_signal
+        )
+
+        self.labels = self.data["labels"][:]
+
+    def __len__(self):
+        return self.num_signals
+
+    def __getitem__(self, idx):
+        points = self.points[idx]
+        sdf = self.sdf[idx]
+
+        # # Get label
+        label = self.labels[idx]
+        return points, sdf, label
+
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    data_path = "/scratch-shared/papas/"
+    dataset = ShapeNetSDFH5(data_path, train=True, debug=True)
+    
+    print(dataset[0])
+    
+    # plot the isocountours
+    contour_level = 0.0
+    points, sdf, label = dataset[10]
+    contour_points_mask = np.abs(sdf - contour_level) < 0.005
+    plt.figure()
+    # create a 3D plot
+    ax = plt.axes(projection='3d')
+    ax.set_title(label)
+    ax.scatter(points[contour_points_mask, 0], points[contour_points_mask, 2], points[contour_points_mask, 1], c=sdf[contour_points_mask], cmap='magma', s=0.5)
+    # rotate the plot
+    ax.view_init(30, 30)
+    # make sure the aspect ratio is correct
+    ax.set_box_aspect([2,1,1])
+    plt.savefig("contour.png")
+    

@@ -74,6 +74,7 @@ class Trainer:
         config,
         train_loader,
         val_loader,
+        test_loader,
         num_devices,
     ):
         seed = config.get("seed", 42)
@@ -83,6 +84,7 @@ class Trainer:
         self.train_loader = train_loader
         self.train_iter = cycle(iter(train_loader))
         self.val_loader = val_loader
+        self.test_loader = test_loader
 
         self.trainer_config = config.train
         self.val_config = config.valid
@@ -197,7 +199,10 @@ class Trainer:
             rng=new_rngs[-1],
         )
 
-    def validate(self, global_step):
+    def test(self, global_step):
+        self.validate(global_step, loader=self.test_loader, name="test")
+    
+    def validate(self, global_step, loader=None, name="val"):
         metrics = {
             "loss": [],
             "acc": [],
@@ -226,9 +231,10 @@ class Trainer:
                     raise ValueError(
                         f"Unsupported type for metric {key}: {type(new_metrics[key])}"
                     )
-
-        val_steps = len(self.val_loader)
-        iter_loader = iter(self.val_loader)
+        if loader is None:
+            loader = self.val_loader
+        val_steps = len(loader)
+        iter_loader = iter(loader)
 
         cur_rng = self.per_device_rng[0]
 
@@ -262,32 +268,33 @@ class Trainer:
 
         wandb.log(
             {
-                "val_metrics/loss": metrics["loss"],
-                "val_metrics/acc": metrics["acc"],
+                f"{name}_metrics/loss": metrics["loss"],
+                f"{name}_metrics/acc": metrics["acc"],
             },
             step=global_step,
         )
         logging.info(
-            f"Validation Step {global_step} | Loss {metrics['loss']} | Acc {metrics['acc']}"
+            f"{name} Step {global_step} | Loss {metrics['loss']} | Acc {metrics['acc']}"
         )
 
-        if self.checkpointing_config is not None:
-            tracked_metric = self.checkpointing_config.get("tracked_metric", None)
-            if tracked_metric is not None:
-                assert (
-                    tracked_metric in metrics.keys()
-                ), f"Tracked metric {tracked_metric} not found in metrics, which are: {metrics.keys()}"
-                if not hasattr(self, "best_metric"):
-                    self.best_metric = metrics[tracked_metric]
-                    self.save(checkpoint_name=f"best_{tracked_metric}")
-                else:
-                    direction = 1 if tracked_metric == "acc" else -1
-                    if (
-                        direction * metrics[tracked_metric]
-                        > direction * self.best_metric
-                    ):
+        if name == "val":
+            if self.checkpointing_config is not None:
+                tracked_metric = self.checkpointing_config.get("tracked_metric", None)
+                if tracked_metric is not None:
+                    assert (
+                        tracked_metric in metrics.keys()
+                    ), f"Tracked metric {tracked_metric} not found in metrics, which are: {metrics.keys()}"
+                    if not hasattr(self, "best_metric"):
                         self.best_metric = metrics[tracked_metric]
                         self.save(checkpoint_name=f"best_{tracked_metric}")
+                    else:
+                        direction = 1 if tracked_metric == "acc" else -1
+                        if (
+                            direction * metrics[tracked_metric]
+                            > direction * self.best_metric
+                        ):
+                            self.best_metric = metrics[tracked_metric]
+                            self.save(checkpoint_name=f"best_{tracked_metric}")
 
     def save(self, checkpoint_name="latest"):
         if self.checkpointing_config is not None:
@@ -296,14 +303,13 @@ class Trainer:
             self.checkpointer.save(
                 path,
                 self.state.params,
-                # ocp.args.StandardSave(self.state.params), # removed due to orbax update
                 force=True,
             )
 
     def load(self, path):
         self.state = self.state.replace(
             params=self.checkpointer.restore(
-                path, ocp.args.StandardRestore(self.state.params)
+                path, self.state.params
             )
         )
 
@@ -363,6 +369,14 @@ class Trainer:
                 logging.info(
                     f"Step {step} | Loss {metrics['loss']} | Learning rate {learning_rate} | Acc {metrics['acc']}"
                 )
+        
+        # load the best model and test
+        checkpoint_dir = self.checkpointing_config.get("checkpoint_dir", "ckpts")
+        path = (Path(f"{checkpoint_dir}") / Path(f"best_acc")).absolute()
+        # if the best model is available, load it
+        if path.exists():
+            self.load(path)
+        self.test(step)
 
     def process_batch(self, batch: Batch):
         # extract necessary information from inputs (coords) and target (image)
