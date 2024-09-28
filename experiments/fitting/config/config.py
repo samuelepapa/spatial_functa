@@ -40,11 +40,12 @@ def get_config():
     # Checkpointing
     config.train.checkpointing = ConfigDict()
     config.train.checkpointing.checkpoint_dir = config.experiment_dir + "ckpts/"
-    config.train.checkpointing.checkpoint_interval = 2500  # in number of steps
+    config.train.checkpointing.checkpoint_interval = 25000  # in number of steps
     config.train.checkpointing.tracked_metric = "mse"
 
     # Validation
     config.valid = ConfigDict()
-    config.valid.val_interval = 5000  # in number of steps
+    config.valid.val_interval = 10000  # in number of steps
+    config.valid.num_epochs = 5
 
     return config

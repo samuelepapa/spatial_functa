@@ -256,12 +256,12 @@ def get_augmented_dataloader(
         return get_image_dataloader(
             dataset_config, subset, batch_size, shuffle, seed, num_minibatches
         )
-    elif dataset_name == "shapenet":
+    elif dataset_name in ["shapenet", "shapenet_batched"]:
         return get_shapenet_dataloader(
             dataset_config, subset, batch_size, shuffle, seed, num_minibatches
         )
     else:
-        raise ValueError(f"Unknown dataset {dataset_name}, only cifar10, mnist, shapenet supported")
+        raise ValueError(f"Unknown dataset {dataset_name}, only cifar10, mnist, shapenet, shapenet_batched supported")
 
 def get_shapenet_dataloader(
     dataset_config: ConfigDict,
@@ -274,9 +274,16 @@ def get_shapenet_dataloader(
     dataset_name = dataset_config.name
     if dataset_name == "shapenet":
         DatasetClass = ShapeNetSDFH5
+    elif dataset_name == "shapenet_batched":
+        DatasetClass = ShapeNetSDFH5Batched
     else:
         raise ValueError(f"Unknown dataset {dataset_name}")
-
+    
+    def batch_collate(batch):
+        batch_list = numpy_collate(batch)
+        batch_list[1] = np.expand_dims(batch_list[1], axis=-1)
+        return Batch(inputs=batch_list[0], targets=batch_list[1], labels=batch_list[2], signal_idxs=batch_list[3])
+    
     if subset == "train":
         dataset = DatasetClass(
             DATA_PATH,
@@ -305,10 +312,6 @@ def get_shapenet_dataloader(
     if subset != "train":
         batch_size = batch_size // num_minibatches
 
-    def batch_collate(batch):
-        batch_list = numpy_collate(batch)
-        batch_list[1] = np.expand_dims(batch_list[1], axis=-1)
-        return Batch(inputs=batch_list[0], targets=batch_list[1], labels=batch_list[2])
 
     dataloader = torch.utils.data.DataLoader(
         dataset,
@@ -367,7 +370,58 @@ class ShapeNetSDFH5(torch.utils.data.Dataset):
 
         # # Get label
         label = self.labels[idx]
-        return points, sdf, label
+        return points, sdf, label, idx
+    
+class ShapeNetSDFH5Batched(torch.utils.data.Dataset):
+    def __init__(
+        self,
+        root: str,
+        seed: int = 42,
+        debug: bool = False,
+        train: bool = True,
+    ):
+        self.root = root
+        self.debug = debug
+        if train:
+            self.file_path = os.path.join(self.root, "shapenet_train.h5")
+        else:
+            self.file_path = os.path.join(self.root, "shapenet_test.h5")
+
+        self.data = h5py.File(self.file_path, "r")
+        self.num_signals = self.data["indices"].shape[0]
+        self.points_per_signal = self.data["points"].shape[0] // self.num_signals
+        self.total_num_points = self.data["points"].shape[0]
+        if self.debug:
+            if train:
+                self.num_signals = 256
+            else:
+                self.num_signals = 64
+            self.points = self.data["points"][:self.num_signals*self.points_per_signal]
+            self.sdf = self.data["sdf"][:self.num_signals*self.points_per_signal]
+            self.total_num_points = self.num_signals*self.points_per_signal
+        else:
+            self.points = self.data["points"][:]
+            self.sdf = self.data["sdf"][:]
+        self.points = self.points.astype(np.float32).reshape(
+            self.num_signals, self.points_per_signal, 3
+        )
+        self.sdf = self.sdf.astype(np.float32).reshape(
+            self.num_signals, self.points_per_signal
+        )
+
+        self.labels = self.data["labels"][:]
+
+    def __len__(self):
+        return self.total_num_points
+
+    def __getitem__(self, idx):
+        signal_idx, point_idx = divmod(idx, self.points_per_signal)
+        points = self.points[signal_idx][point_idx]
+        sdf = self.sdf[signal_idx][point_idx]
+
+        # # Get label
+        label = self.labels[signal_idx]
+        return points, sdf, label, signal_idx
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt

@@ -23,6 +23,14 @@ DATASET_CONFIGS = {
         "resolution": 50_000,
         "total_points": 150_000,
     },
+    "shapenet_batched": {
+        "num_channels": 1,
+        "num_classes": 55,
+        "coords_dim": 3,
+        "data_type": "sdf",
+        "resolution": 50_000,
+        "total_points": 150_000,
+    },
 }
 
 
@@ -38,7 +46,7 @@ def get_config(name):
     config.data_type = DATASET_CONFIGS[name]["data_type"]
     config.total_points = DATASET_CONFIGS[name].get("total_points", None)
 
-    config.debug = True    
+    config.debug = False    
     config.prefetch = False
     config.sampling_mode = "full_image"
     config.num_augmentations = 1

@@ -38,6 +38,8 @@ class Batch:
     targets: jax.Array = None
     labels: jax.Array = None
     batch_stats: jax.Array = None
+    signal_idxs: jax.Array = None
+    
 
 
 def default_get_minibatch(batch, start_idx, end_idx):
