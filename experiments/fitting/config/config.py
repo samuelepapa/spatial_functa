@@ -12,10 +12,10 @@ def get_config():
 
     config.train = ConfigDict()
     config.train.batch_size = 32
-    config.train.num_steps = 2e5
+    config.train.num_steps = 2e6
     config.train.outer_clip_grads = None
     config.train.inner_clip_grads = None
-    config.train.num_minibatches = 1
+    config.train.num_minibatches = 4
 
     # Meta-learning
     config.train.inner_learning_rate = 1e-2  # only used if learn_lrs is False
@@ -45,7 +45,7 @@ def get_config():
 
     # Validation
     config.valid = ConfigDict()
-    config.valid.val_interval = 10000  # in number of steps
-    config.valid.num_epochs = 5
+    config.valid.val_interval = 100000  # in number of steps
+    config.valid.num_epochs = 3
 
     return config

@@ -245,17 +245,17 @@ class LatentToModulation(nn.Module):
             scale, shift = jnp.split(x, 2, axis=-1)
             scale = (
                 scale.reshape(
-                    (self.num_modulation_layers, self.input_dim, self.modulation_dim)
+                    (-1, self.num_modulation_layers, self.input_dim, self.modulation_dim)
                 )
                 + 1
             )
             shift = shift.reshape(
-                (self.num_modulation_layers, self.input_dim, self.modulation_dim)
+                (-1, self.num_modulation_layers, self.input_dim, self.modulation_dim)
             )
             return {"scale": scale, "shift": shift}
         else:
             x = x.reshape(
-                (self.num_modulation_layers, self.input_dim, self.modulation_dim)
+                (-1, self.num_modulation_layers, self.input_dim, self.modulation_dim)
             )
             if self.shift_modulate:
                 return {"shift": x}
@@ -388,7 +388,7 @@ class SIREN(nn.Module):
         )
 
     def __call__(self, x, latent_feat_map):
-        if latent_feat_map.shape[0] > 1:
+        if latent_feat_map.shape[1] > 1:
             for layer_num, layer in enumerate(self.conv_blocks):
                 latent_feat_map = layer(latent_feat_map)
 

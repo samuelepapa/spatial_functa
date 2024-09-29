@@ -207,7 +207,7 @@ class ShapeTrainer:
 
     def get_latent_vector(self, latent_params):
         return jax.pmap(
-            jax.vmap(self.latent_vector_model.apply, in_axes=(0,)),
+            self.latent_vector_model.apply,
             axis_name="i",
             in_axes=(0,),
         )(
@@ -259,9 +259,7 @@ class ShapeTrainer:
         self.val_loss_fn = jax.jit(_val_loss_fn)
 
     def inner_fit(self, field_params, coords, target, idx, latent_vector_model):
-        return jax.vmap(
-            inner_fit, in_axes=(None, None, None, 0, 0, 0)
-        )(
+        return inner_fit(
             field_params,
             self.model,
             latent_vector_model,
@@ -288,13 +286,13 @@ class ShapeTrainer:
         latent_params = flax.core.FrozenDict(
             self.latent_vector_model.init(
                 latent_init_rng,
-                batch.signal_idxs[0][0],
+                batch.signal_idxs[0],
             )["params"]
         )
 
         # TODO: initialize with jax.eval_shape()
         latent_vector = jax.pmap(
-            jax.vmap(self.latent_vector_model.apply, in_axes=(None, 0)),
+            self.latent_vector_model.apply,
             axis_name="i",
             in_axes=(None, 0),
         )({"params": latent_params}, batch.signal_idxs)
@@ -302,8 +300,8 @@ class ShapeTrainer:
         field_params = flax.core.FrozenDict(
             self.model.init(
                 field_init_rng,
-                coords[0][0],
-                latent_vector[0][0],
+                coords[0],
+                latent_vector[0],
             )["params"]
         )
 
@@ -417,7 +415,12 @@ class ShapeTrainer:
         for step in tqdm(range(val_steps), desc="Validation", total=val_steps):
             batch = next(iter_loader)
             batch = self.process_batch(batch)
-            valid_state, cur_metrics, visuals = self.val_step(valid_state, batch)
+            new_state, cur_metrics, visuals = self.val_step(valid_state, batch)
+            params['latent_params'] = new_state.params['latent_params']
+            valid_state = valid_state.replace(params=params)
+            # check that "field_params" in valid_state.params didn't change
+            eq_check = jax.tree_flatten(jax.tree_map(lambda x,y: x == y, self.state.params['field_params'], valid_state.params['field_params']))
+            assert all([x.all() for x in eq_check[0]]), "field_params in valid_state.params changed"
             
             if step % log_steps == 0:
                 wandb.log(
@@ -472,26 +475,26 @@ class ShapeTrainer:
         
         global_step = 0
 
-        for _ in range(self.num_steps):
+        for local_step in range(self.num_steps):
             batch = next(self.train_iter)
             batch = self.process_batch(batch)
 
-            set_profiler(
-                self.trainer_config.profiler, global_step, self.trainer_config.log_dir
-            )
+            # set_profiler(
+            #     self.trainer_config.profiler, global_step, self.trainer_config.log_dir
+            # )
 
-            if global_step % self.val_config.val_interval == 0 or (global_step == self.num_steps - 1):
+            if (local_step + 1) % self.val_config.val_interval == 0 or (local_step == self.num_steps - 1):
                 global_step = self.validate(global_step)
 
             self.state, metrics, visuals = self.train_step(self.state, batch)
 
             if self.checkpointing_config is not None and (
-                global_step % self.checkpointing_config.checkpoint_interval == 0
-                or (global_step == self.num_steps - 1)
+                local_step % self.checkpointing_config.checkpoint_interval == 0
+                or (local_step == self.num_steps - 1)
             ):
                 self.save()
 
-            if global_step % self.log_steps.loss == 0 or (global_step == self.num_steps - 1):
+            if local_step % self.log_steps.loss == 0 or (local_step == self.num_steps - 1):
                 # log the learning rate
                 learning_rate = extract_learning_rate(
                     self.lr_schedule, self.state.opt_state
@@ -523,44 +526,43 @@ class ShapeTrainer:
     def process_batch(self, batch: Batch):
         # extract necessary information from inputs (coords) and target (image)
         batch_size = batch.inputs.shape[0]
-        if batch_size == 1:
+        if batch_size == self.num_devices:
             batch_size = batch.inputs.shape[1]
-            batch = dataclasses.replace(
+            return dataclasses.replace(
                 batch,
-                labels=jnp.broadcast_to(batch.labels, (batch_size, *batch.labels.shape)),
-                signal_idxs=jnp.broadcast_to(
-                    batch.signal_idxs, (batch_size, *batch.signal_idxs.shape)
-                ),
+                labels=jnp.broadcast_to(batch.labels[...,None], (self.num_devices, batch_size)),
+                signal_idxs=jnp.broadcast_to(batch.signal_idxs[...,None], (self.num_devices, batch_size)),
             )
-        num_points_per_device = batch_size // self.num_devices
-        assert (
-            num_points_per_device % self.num_minibatches == 0
-        ), f"Batch size {num_points_per_device} is not divisible by num_minibatches {self.num_minibatches}"
-        num_channels = batch.targets.shape[-1]
+        else:
+            num_points_per_device = batch_size // self.num_devices
+            assert (
+                num_points_per_device % self.num_minibatches == 0
+            ), f"Batch size {num_points_per_device} is not divisible by num_minibatches {self.num_minibatches}"
+            num_channels = batch.targets.shape[-1]
 
-        # reshape to account for the number of devices
-        inputs = batch.inputs.reshape(
-            self.num_devices, num_points_per_device, self.coords_dim
-        )
-        targets = batch.targets.reshape(
-            self.num_devices, num_points_per_device, num_channels
-        )
-        labels = batch.labels.reshape(
-            self.num_devices,
-            num_points_per_device,
-        )
-        signal_idxs = batch.signal_idxs.reshape(
-            self.num_devices,
-            num_points_per_device,
-        )
+            # reshape to account for the number of devices
+            inputs = batch.inputs.reshape(
+                self.num_devices, num_points_per_device, self.coords_dim
+            )
+            targets = batch.targets.reshape(
+                self.num_devices, num_points_per_device, num_channels
+            )
+            labels = batch.labels.reshape(
+                self.num_devices,
+                num_points_per_device,
+            )
+            signal_idxs = batch.signal_idxs.reshape(
+                self.num_devices,
+                num_points_per_device,
+            )
 
-        return dataclasses.replace(
-            batch,
-            inputs=inputs,
-            targets=targets,
-            labels=labels,
-            signal_idxs=signal_idxs,
-        )
+            return dataclasses.replace(
+                batch,
+                inputs=inputs,
+                targets=targets,
+                labels=labels,
+                signal_idxs=signal_idxs,
+            )
 
     def create_train_step(self):
         def _train_step(state, batch):

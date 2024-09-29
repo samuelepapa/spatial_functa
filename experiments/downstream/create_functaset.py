@@ -23,6 +23,7 @@ from spatial_functa.dataloader import (
 )
 from spatial_functa import SIREN, LatentVector
 from spatial_functa.trainer import Trainer
+from spatial_functa.shape_trainer import ShapeTrainer
 
 
 _CONFIG = config_flags.DEFINE_config_file(
@@ -122,11 +123,11 @@ def main(_):
         learn_lrs=loaded_config.model.learn_lrs,
         lr_init_range=loaded_config.train.inner_lr_init_range,
         lr_clip_range=loaded_config.train.inner_lr_clip_range,
+        lr_scaling=loaded_config.train.inner_lr_scaling,
+        lr_shape_type=loaded_config.model.lr_shape_type,
         scale_modulate=loaded_config.model.scale_modulate,
         shift_modulate=loaded_config.model.shift_modulate,
         interpolation_type=loaded_config.model.interpolation_type,
-        lr_shape_type=loaded_config.model.lr_shape_type,
-        lr_scaling=loaded_config.train.inner_lr_scaling,
     )
 
     latent_vector_model = LatentVector(
@@ -139,32 +140,53 @@ def main(_):
             loaded_config.model.lr_shape_type,
             loaded_config.model.latent_spatial_dim,
             loaded_config.model.latent_dim,
-        ),
+        ),   
         lr_init_range=loaded_config.train.inner_lr_init_range,
         lr_clip_range=loaded_config.train.inner_lr_clip_range,
     )
 
     example_batch = next(iter(train_dataloader))
     # initialize wandb
-
-    trainer = Trainer(
-        model=model,
-        lr_model=lr_model,
-        latent_vector_model=latent_vector_model,
-        example_batch=example_batch,
-        config=loaded_config,
-        train_loader=train_dataloader,
-        val_loader=val_dataloader,
-        num_devices=jax.device_count(),
-    )
-
-    trainer.load(
-        str(
-            Path(
-                (loaded_config.train.checkpointing.checkpoint_dir) / Path("best_psnr")
-            ).absolute()
+    
+    if config.dataset.data_type == "image":
+        trainer = Trainer(
+            model=model,
+            lr_model=lr_model,
+            latent_vector_model=latent_vector_model,
+            example_batch=example_batch,
+            config=loaded_config,
+            train_loader=train_dataloader,
+            val_loader=val_dataloader,
+            num_devices=jax.device_count(),
         )
-    )
+        trainer.load(
+            str(
+                Path(
+                    (loaded_config.train.checkpointing.checkpoint_dir) / Path("best_psnr")
+                ).absolute()
+            )
+        )
+    elif config.dataset.data_type == "sdf":
+        trainer = ShapeTrainer(
+            model=model,
+            example_batch=example_batch,
+            config=loaded_config,
+            train_loader=train_dataloader,
+            val_loader=val_dataloader,
+            num_devices=jax.device_count(),
+            lr_model=lr_model,
+            latent_vector_model=latent_vector_model,
+        )
+        
+        trainer.load(
+            str(
+                Path(
+                    (loaded_config.train.checkpointing.checkpoint_dir) / Path("best_mse")
+                ).absolute()
+            )
+        )
+    else:
+        raise ValueError(f"Unknown data type {config.dataset.data_type}")
 
     field_params = trainer.state.params
     starting_latent_params = trainer.latent_params
@@ -178,9 +200,16 @@ def main(_):
         json.dump(loaded_config.to_dict(), fp)
 
     # copy the model checkpoint
-    original_checkpoint_dir = Path(
-        (loaded_config.train.checkpointing.checkpoint_dir) / Path("best_psnr")
-    ).absolute()
+    if config.dataset.data_type == "image":
+        original_checkpoint_dir = Path(
+            (loaded_config.train.checkpointing.checkpoint_dir) / Path("best_psnr")
+        ).absolute()
+    elif config.dataset.data_type == "sdf":
+        original_checkpoint_dir = Path(
+            (loaded_config.train.checkpointing.checkpoint_dir) / Path("best_mse")
+        ).absolute()
+    else:
+        raise ValueError(f"Unknown data type {config.dataset.data_type}")
     destination_checkpoint_dir = functaset_dir / "model_checkpoint"
     destination_checkpoint_dir.mkdir(parents=True, exist_ok=True)
     copy_tree(str(original_checkpoint_dir), str(destination_checkpoint_dir))

@@ -256,7 +256,7 @@ def get_augmented_dataloader(
         return get_image_dataloader(
             dataset_config, subset, batch_size, shuffle, seed, num_minibatches
         )
-    elif dataset_name in ["shapenet", "shapenet_batched"]:
+    elif dataset_name in ["shapenet", "shapenet_batched", "shapenet_chunked"]:
         return get_shapenet_dataloader(
             dataset_config, subset, batch_size, shuffle, seed, num_minibatches
         )
@@ -276,13 +276,26 @@ def get_shapenet_dataloader(
         DatasetClass = ShapeNetSDFH5
     elif dataset_name == "shapenet_batched":
         DatasetClass = ShapeNetSDFH5Batched
+    elif dataset_name == "shapenet_chunked":
+        DatasetClass = ShapeNetSDFH5Chunked
     else:
         raise ValueError(f"Unknown dataset {dataset_name}")
     
-    def batch_collate(batch):
-        batch_list = numpy_collate(batch)
-        batch_list[1] = np.expand_dims(batch_list[1], axis=-1)
-        return Batch(inputs=batch_list[0], targets=batch_list[1], labels=batch_list[2], signal_idxs=batch_list[3])
+    if dataset_name in ["shapenet", "shapenet_batched"]:
+        def batch_collate(batch):
+            batch_list = numpy_collate(batch)
+            batch_list[1] = np.expand_dims(batch_list[1], axis=-1)
+            batch_list[3] = np.expand_dims(batch_list[3], axis=-1)
+            return Batch(inputs=batch_list[0], targets=batch_list[1], labels=batch_list[2], signal_idxs=batch_list[3])
+    elif dataset_name == "shapenet_chunked":
+        def batch_collate(batch):
+            batch_list = numpy_collate(batch)
+            targets = np.expand_dims(batch_list[1], axis=-1)
+            targets = targets.reshape(-1, 1)
+            inputs = batch_list[0].reshape(-1, 3)
+            labels = np.repeat(batch_list[2], batch_list[0].shape[1], axis=0)
+            signal_idxs = np.repeat(batch_list[3], batch_list[0].shape[1], axis=0)
+            return Batch(inputs=inputs, targets=targets, labels=labels, signal_idxs=signal_idxs)
     
     if subset == "train":
         dataset = DatasetClass(
@@ -344,9 +357,9 @@ class ShapeNetSDFH5(torch.utils.data.Dataset):
         self.total_num_points = self.data["points"].shape[0]
         if self.debug:
             if train:
-                self.num_signals = 256
+                self.num_signals = 2056
             else:
-                self.num_signals = 64
+                self.num_signals = 1000
             self.points = self.data["points"][:self.num_signals*self.points_per_signal]
             self.sdf = self.data["sdf"][:self.num_signals*self.points_per_signal]
         else:
@@ -402,12 +415,12 @@ class ShapeNetSDFH5Batched(torch.utils.data.Dataset):
         else:
             self.points = self.data["points"][:]
             self.sdf = self.data["sdf"][:]
-        self.points = self.points.astype(np.float32).reshape(
-            self.num_signals, self.points_per_signal, 3
-        )
-        self.sdf = self.sdf.astype(np.float32).reshape(
-            self.num_signals, self.points_per_signal
-        )
+        # self.points = self.points.astype(np.float32).reshape(
+        #     self.num_signals, self.points_per_signal, 3
+        # )
+        # self.sdf = self.sdf.astype(np.float32).reshape(
+        #     self.num_signals, self.points_per_signal
+        # )
 
         self.labels = self.data["labels"][:]
 
@@ -416,12 +429,69 @@ class ShapeNetSDFH5Batched(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         signal_idx, point_idx = divmod(idx, self.points_per_signal)
-        points = self.points[signal_idx][point_idx]
-        sdf = self.sdf[signal_idx][point_idx]
+        points = self.points[idx]
+        sdf = self.sdf[idx]
 
         # # Get label
         label = self.labels[signal_idx]
         return points, sdf, label, signal_idx
+
+class ShapeNetSDFH5Chunked(torch.utils.data.Dataset):
+    def __init__(
+        self,
+        root: str,
+        seed: int = 42,
+        debug: bool = False,
+        train: bool = True,
+        chunk_size=5000,
+    ):
+        self.root = root
+        self.debug = debug
+        if train:
+            self.file_path = os.path.join(self.root, "shapenet_train.h5")
+        else:
+            self.file_path = os.path.join(self.root, "shapenet_test.h5")
+
+        self.data = h5py.File(self.file_path, "r")
+        self.num_signals = self.data["indices"].shape[0]
+        self.points_per_signal = self.data["points"].shape[0] // self.num_signals
+        self.total_num_points = self.data["points"].shape[0]
+        if self.debug:
+            if train:
+                self.num_signals = 2560
+            else:
+                self.num_signals = 64
+            self.points = self.data["points"][:self.num_signals*self.points_per_signal]
+            self.sdf = self.data["sdf"][:self.num_signals*self.points_per_signal]
+            self.total_num_points = self.num_signals*self.points_per_signal
+        else:
+            self.points = self.data["points"][:]
+            self.sdf = self.data["sdf"][:]
+            
+        self.chunk_size = chunk_size
+        self.num_chunks_per_signal = self.points_per_signal // self.chunk_size
+        self.points = self.points.astype(np.float32).reshape(
+            -1, self.chunk_size, 3
+        )
+        self.sdf = self.sdf.astype(np.float32).reshape(
+            -1, self.chunk_size
+        )
+        self.total_num_chunks = self.points.shape[0]
+        
+        self.labels = self.data["labels"][:]
+
+    def __len__(self):
+        return self.total_num_chunks
+
+    def __getitem__(self, idx):
+        signal_idx, chunk_idx = divmod(idx, self.num_chunks_per_signal)
+        points = self.points[idx]
+        sdf = self.sdf[idx]
+
+        # # Get label
+        label = self.labels[signal_idx]
+        return points, sdf, label, signal_idx
+
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt

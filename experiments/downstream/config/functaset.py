@@ -6,6 +6,9 @@ FUNCTASET_CONFIGS = {
     },
     "mnist": {
         "num_classes": 10,
+    },
+    "shapenet": {
+        "num_classes": 10,
     }
 }
 
