@@ -39,6 +39,14 @@ DATASET_CONFIGS = {
         "resolution": 50_000,
         "total_points": 150_000,
     },
+    "shapenet_10classes": {
+        "num_channels": 1,
+        "num_classes": 10,
+        "coords_dim": 3,
+        "data_type": "sdf",
+        "resolution": 50_000,
+        "total_points": 150_000,
+    },
 }
 
 

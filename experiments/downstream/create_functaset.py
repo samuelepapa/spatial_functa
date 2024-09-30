@@ -23,7 +23,7 @@ from spatial_functa.dataloader import (
 )
 from spatial_functa import SIREN, LatentVector
 from spatial_functa.trainer import Trainer
-from spatial_functa.shape_trainer import ShapeTrainer
+from spatial_functa.shape_trainer import ShapeTrainer, iou
 
 
 _CONFIG = config_flags.DEFINE_config_file(
@@ -258,6 +258,9 @@ def main(_):
             loss, recon, latent_params = trainer.forward(
                 field_params, starting_latent_params, coords, target
             )
+            
+            cur_iou = iou(target[:,:,-1], recon)
+            print(f"IOU: {cur_iou.mean()}")
 
             latent_vector = trainer.get_latent_vector(latent_params)
             latent_vector = latent_vector.reshape(
@@ -300,18 +303,18 @@ def main(_):
                     }
                 )
 
-            if i % config.train.log_steps.image == 0:
-                recon = jax.device_get(recon).reshape(-1, *trainer.image_shape)
-                target = jax.device_get(target).reshape(-1, *trainer.image_shape)
+            # if i % config.train.log_steps.image == 0:
+            #     recon = jax.device_get(recon).reshape(-1, *trainer.image_shape)
+            #     target = jax.device_get(target).reshape(-1, *trainer.image_shape)
 
-                for j in range(min(5, trainer.num_signals_per_device)):
-                    wandb.log(
-                        {
-                            f"images/recon_{j}": wandb.Image(recon[j]),
-                            f"images/target_{j}": wandb.Image(target[j]),
-                        },
-                        step=i,
-                    )
+            #     for j in range(min(5, trainer.num_signals_per_device)):
+            #         wandb.log(
+            #             {
+            #                 f"images/recon_{j}": wandb.Image(recon[j]),
+            #                 f"images/target_{j}": wandb.Image(target[j]),
+            #             },
+            #             step=i,
+            #         )
         functaset_file.close()
         wandb.finish()
 

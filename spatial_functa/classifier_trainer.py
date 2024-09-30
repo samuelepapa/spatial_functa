@@ -402,6 +402,10 @@ class Trainer:
         )
         # one-hot encode the labels
         num_classes = self.trainer_config.num_classes
+        map_labels_to_idx = {0.: 0, 3.:0,  6.:1, 15.:2, 18.:3, 27.:4, 30.:5, 32.:6, 35.:7, 39.:8, 40.:9}
+        # map labels to the idx
+        labels = jnp.array([map_labels_to_idx[label] for label in labels.flatten()]).reshape(labels.shape)
+        # labels = jnp.vectorize(map_labels_to_idx.get)(labels)
         labels = jax.nn.one_hot(labels, num_classes)
         if self.trainer_config.label_smoothing == True:
             l = self.trainer_config.label_smoothing_factor

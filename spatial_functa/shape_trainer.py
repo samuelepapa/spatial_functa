@@ -523,6 +523,9 @@ class ShapeTrainer:
         batch_size = batch.inputs.shape[0]
         num_signals_per_device = batch_size // self.num_devices
         num_channels = batch.targets.shape[-1]
+        
+        # remove signal_idxs from the batch
+        batch = dataclasses.replace(batch, signal_idxs=None)
 
         # reshape to account for the number of devices
         inputs = batch.inputs.reshape(self.num_devices, num_signals_per_device, -1, self.coords_dim)

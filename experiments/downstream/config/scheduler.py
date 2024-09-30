@@ -8,7 +8,7 @@ def get_config(scheduler_name: str):
     config.name = scheduler_name
 
     if scheduler_name == "constant":
-        config.lr = 2e-3
+        config.lr = 2e-4
     elif scheduler_name == "cosine_decay":
         config.lr = 3e-4
         config.decay_steps = 10000
