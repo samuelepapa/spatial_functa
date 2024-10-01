@@ -399,6 +399,7 @@ selected_categories = {
     "03001627": 35,  # 1813
     "04379243": 3,  # 1597
 }
+categories_to_labels = {v: k for k, v in enumerate(selected_categories.values())}
 
 class ShapeNetSDFH510Classes(torch.utils.data.Dataset):
     def __init__(
@@ -445,7 +446,7 @@ class ShapeNetSDFH510Classes(torch.utils.data.Dataset):
             if label in selected_categories.values():
                 self.points.append(point)
                 self.sdf.append(sdf)
-                self.labels.append(label)
+                self.labels.append(categories_to_labels[label])
                 
         self.points = np.array(self.points)
         self.sdf = np.array(self.sdf)

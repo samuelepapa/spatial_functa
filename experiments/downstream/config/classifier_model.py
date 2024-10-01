@@ -21,7 +21,7 @@ def get_config(model_name: str):
     elif model_name == "mlp":
         config.hidden_dim = 1024
         config.num_layers = 3
-        config.dropout_prob = 0.1
+        config.dropout_prob = 0.2
     else:
         raise ValueError(f"Unknown model {model_name}")
 

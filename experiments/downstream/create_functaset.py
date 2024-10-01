@@ -248,6 +248,10 @@ def main(_):
         tqdm_iter = tqdm(
             enumerate(loader), total=len(loader), desc=f"Creating functaset {split}"
         )
+        
+        if config.dataset.data_type == "sdf":
+            acc_metrics = []
+            batch_sizes = []
 
         # loop through the training dataset
         for i, batch in tqdm_iter:
@@ -259,8 +263,11 @@ def main(_):
                 field_params, starting_latent_params, coords, target
             )
             
-            cur_iou = iou(target[:,:,-1], recon)
-            print(f"IOU: {cur_iou.mean()}")
+            if config.dataset.data_type == "sdf":
+                cur_iou = iou(target[:,:,-1], recon)
+                cur_iou = cur_iou.reshape(-1,)
+                acc_metrics.append(cur_iou)
+                batch_sizes.append(cur_iou.shape[0])
 
             latent_vector = trainer.get_latent_vector(latent_params)
             latent_vector = latent_vector.reshape(
@@ -302,23 +309,39 @@ def main(_):
                         "functaset_idx": functaset_idx,
                     }
                 )
+                
+            if config.dataset.data_type == "sdf":
+                final_metric = np.sum(acc_metrics) / np.sum(batch_sizes)
+                final_metric_squares = np.sum(np.concatenate(acc_metrics)**2) / np.sum(batch_sizes)
+                final_metric_std = np.sqrt(final_metric_squares - final_metric**2)
+                wandb.log({"iou": final_metric, "iou_std": final_metric_std}, step=i)
+            
 
-            # if i % config.train.log_steps.image == 0:
-            #     recon = jax.device_get(recon).reshape(-1, *trainer.image_shape)
-            #     target = jax.device_get(target).reshape(-1, *trainer.image_shape)
+            if config.dataset.data_type == "image" and i % config.train.log_steps.image == 0:
+                recon = jax.device_get(recon).reshape(-1, *trainer.image_shape)
+                target = jax.device_get(target).reshape(-1, *trainer.image_shape)
 
-            #     for j in range(min(5, trainer.num_signals_per_device)):
-            #         wandb.log(
-            #             {
-            #                 f"images/recon_{j}": wandb.Image(recon[j]),
-            #                 f"images/target_{j}": wandb.Image(target[j]),
-            #             },
-            #             step=i,
-            #         )
+                for j in range(min(5, trainer.num_signals_per_device)):
+                    wandb.log(
+                        {
+                            f"images/recon_{j}": wandb.Image(recon[j]),
+                            f"images/target_{j}": wandb.Image(target[j]),
+                        },
+                        step=i,
+                    )
+            
+                
         functaset_file.close()
+        if config.dataset.data_type == "sdf":
+            final_metric = np.sum(acc_metrics) / np.sum(batch_sizes)
+            final_metric_squares = np.sum(np.concatenate(acc_metrics)**2) / np.sum(batch_sizes)
+            final_metric_std = np.sqrt(final_metric_squares - final_metric**2)
+            print(f"Final IoU: {final_metric}, Final IoU std: {final_metric_std}")
+            wandb.log({"iou": final_metric, "iou_std": final_metric_std}, step=i)
+        
         wandb.finish()
 
-    make_functaset(train_dataloader, "train")
+    # make_functaset(train_dataloader, "train")
     make_functaset(val_dataloader, "val")
     make_functaset(test_dataloader, "test")
 
