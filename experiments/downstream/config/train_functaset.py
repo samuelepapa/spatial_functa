@@ -10,7 +10,7 @@ def get_config():
     config.experiment_dir = (
         f'outputs/downstream_functa_{time.strftime("%Y%m%d-%H%M%S")}/'
     )
-    config.seed = 0
+    config.seed = 2
 
     config.train = ConfigDict()
     config.train.batch_size = 512

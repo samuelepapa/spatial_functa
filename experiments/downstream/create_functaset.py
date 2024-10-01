@@ -22,7 +22,7 @@ from spatial_functa.dataloader import (
     get_augmented_dataloader,
 )
 from spatial_functa import SIREN, LatentVector
-from spatial_functa.trainer import Trainer
+from spatial_functa.trainer import Trainer, psnr
 from spatial_functa.shape_trainer import ShapeTrainer
 
 
@@ -30,10 +30,10 @@ _CONFIG = config_flags.DEFINE_config_file(
     "config", "experiments/downstream/config/create_functaset.py"
 )
 _DATASET = config_flags.DEFINE_config_file(
-    "dataset", "experiments/downstream/config/dataset.py:cifar10"
+    "dataset", "experiments/downstream/config/dataset.py:mnist"
 )
 _FUNCTASET = config_flags.DEFINE_config_file(
-    "functaset", "experiments/downstream/config/functaset.py"
+    "functaset", "experiments/downstream/config/functaset.py:mnist"
 )
 
 
@@ -123,8 +123,8 @@ def main(_):
         learn_lrs=loaded_config.model.learn_lrs,
         lr_init_range=loaded_config.train.inner_lr_init_range,
         lr_clip_range=loaded_config.train.inner_lr_clip_range,
-        lr_scaling=loaded_config.train.inner_lr_scaling,
-        lr_shape_type=loaded_config.model.lr_shape_type,
+        lr_scaling=loaded_config.train.get("inner_lr_scaling", 1.),
+        lr_shape_type=loaded_config.model.get("lr_shape_type", "full"),
         scale_modulate=loaded_config.model.scale_modulate,
         shift_modulate=loaded_config.model.shift_modulate,
         interpolation_type=loaded_config.model.interpolation_type,
@@ -137,7 +137,7 @@ def main(_):
     
     lr_model = MetaSGDLr(
         shape=lr_shape_selection(
-            loaded_config.model.lr_shape_type,
+            loaded_config.model.get("lr_shape_type", "full"),
             loaded_config.model.latent_spatial_dim,
             loaded_config.model.latent_dim,
         ),   
@@ -249,6 +249,9 @@ def main(_):
             enumerate(loader), total=len(loader), desc=f"Creating functaset {split}"
         )
 
+        acc_metrics = []
+        metrics_batch = []
+
         # loop through the training dataset
         for i, batch in tqdm_iter:
             batch = trainer.process_batch(batch)
@@ -258,6 +261,9 @@ def main(_):
             loss, recon, latent_params = trainer.forward(
                 field_params, starting_latent_params, coords, target
             )
+
+            acc_metrics.append(psnr(recon, target))
+            metrics_batch.append(acc_metrics[-1].shape)
 
             latent_vector = trainer.get_latent_vector(latent_params)
             latent_vector = latent_vector.reshape(
@@ -313,6 +319,20 @@ def main(_):
                         step=i,
                     )
         functaset_file.close()
+
+        # accumulate the metrics compute mean and std
+        acc_metrics = np.array(acc_metrics)
+        metrics_batch = np.array(metrics_batch)
+        mean_acc = np.sum(acc_metrics) / np.sum(metrics_batch)
+        mean_squares = np.sum(acc_metrics ** 2) / np.sum(metrics_batch)
+        std_acc = np.sqrt(mean_squares - mean_acc ** 2)
+        wandb.log(
+            {
+                "mean_psnr": mean_acc,
+                "std_psnr": std_acc,
+            }
+        )
+
         wandb.finish()
 
     make_functaset(train_dataloader, "train")

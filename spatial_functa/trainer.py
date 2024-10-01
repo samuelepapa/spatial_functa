@@ -152,8 +152,8 @@ class Trainer:
         self.model = model
         self.latent_vector_model = latent_vector_model
         self.lr_model = lr_model
-        self.inner_lr_scaling = config.train.inner_lr_scaling
-        self.coords_dim = config.dataset.coords_dim
+        self.inner_lr_scaling = config.train.get("inner_lr_scaling", 1.)
+        self.coords_dim = config.dataset.get("coords_dim", 2)
 
         # data loading
         self.train_loader = train_loader

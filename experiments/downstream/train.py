@@ -141,26 +141,26 @@ def main(_):
         dir=str(experiment_dir),
     )
     
-    if config.dataset.data_type == "image":
-        trainer = Trainer(
-            model=model,
-            example_batch=example_batch,
-            config=config,
-            train_loader=train_dataloader,
-            val_loader=val_dataloader,
-            test_loader=test_dataloader,
-            num_devices=jax.device_count(),
-        )
-    elif config.dataset.data_type == "sdf":
-        trainer = ShapeTrainer(
-            model=model,
-            example_batch=example_batch,
-            config=config,
-            train_loader=train_dataloader,
-            val_loader=val_dataloader,
-            test_loader=test_dataloader,
-            num_devices=jax.device_count(),
-        )
+    # if config.dataset.data_type == "image":
+    trainer = Trainer(
+        model=model,
+        example_batch=example_batch,
+        config=config,
+        train_loader=train_dataloader,
+        val_loader=val_dataloader,
+        test_loader=test_dataloader,
+        num_devices=jax.device_count(),
+    )
+    # elif config.dataset.data_type == "sdf":
+    #     trainer = ShapeTrainer(
+    #         model=model,
+    #         example_batch=example_batch,
+    #         config=config,
+    #         train_loader=train_dataloader,
+    #         val_loader=val_dataloader,
+    #         test_loader=test_dataloader,
+    #         num_devices=jax.device_count(),
+    #     )
 
     trainer.train()
 

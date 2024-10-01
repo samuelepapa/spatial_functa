@@ -57,7 +57,7 @@ def get_config(name):
     config.debug = False    
     config.prefetch = False
     config.sampling_mode = "full_image"
-    config.num_augmentations = 1
+    config.num_augmentations = 50
     config.apply_agument = False
     config.num_workers = 0
 
