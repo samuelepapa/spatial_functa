@@ -8,7 +8,7 @@ FUNCTASET_CONFIGS = {
         "num_classes": 10,
     },
     "shapenet": {
-        "num_classes": 10,
+        "num_classes": 55,
     }
 }
 

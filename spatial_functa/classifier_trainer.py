@@ -245,6 +245,7 @@ class Trainer:
         for step in tqdm(range(val_steps), desc="Validation", total=val_steps):
             batch = next(iter_loader)
             batch = self.process_batch(batch)
+            print(batch.labels.shape)
             latent_vector = batch.inputs
             labels = batch.labels
             logits = jax.device_get(

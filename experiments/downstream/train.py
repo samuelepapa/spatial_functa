@@ -67,6 +67,7 @@ def load_config_and_store() -> Tuple[ConfigDict, Path]:
 
 def main(_):
     (config, experiment_dir) = load_config_and_store()
+    print(config)
 
     # throw warning if the git repository has not been commited
     repo = git.Repo(search_parent_directories=True)

@@ -341,9 +341,9 @@ def main(_):
         
         wandb.finish()
 
-    # make_functaset(train_dataloader, "train")
-    make_functaset(val_dataloader, "val")
-    make_functaset(test_dataloader, "test")
+    make_functaset(train_dataloader, "train")
+    # make_functaset(val_dataloader, "val")
+    # make_functaset(test_dataloader, "test")
 
 
 if __name__ == "__main__":
