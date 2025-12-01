@@ -210,7 +210,7 @@ class LatentToModulation(nn.Module):
     input_dim: int
     shift_modulate: bool = True
     scale_modulate: bool = True
-    initialization: Literal['he', 'default'] = 'default'
+    activation: Callable[[Array], Array] = nn.relu
 
     def setup(self):
         if self.shift_modulate and self.scale_modulate:
@@ -228,15 +228,13 @@ class LatentToModulation(nn.Module):
         )
 
         # create a MLP to process the latent vector based on self.layer_sizes and self.modulation_output_size
-        self.network = nn.Conv(
-            self.modulation_output_size,
-            1,
-            "SAME",
-            kernel_init=nn.initializers.VarianceScaling(2.0, "fan_in", "uniform") if self.initialization == 'he' else None,
+        self.mlp = MLP(
+            layer_sizes=self.layer_sizes + (self.modulation_output_size,),
+            activation=self.activation,
         )
 
-    def __call__(self, x: Array) -> Array:
-        x = self.network(x)
+    def __call__(self, x: Array) -> Dict[str, Array]:
+        x = self.mlp(x)
         # Split the output into scale and shift modulations
         if self.modulations_per_unit == 2:
             scale, shift = jnp.split(x, 2, axis=-1)
@@ -307,6 +305,14 @@ class SIREN(nn.Module):
     interpolation_type: str = "linear"
 
     def setup(self):
+        self.conv_blocks = [
+            nn.Conv(
+                self.modulation_hidden_dim, 
+                (3, 3), 
+                (1, 1), 
+                padding="SAME", 
+                kernel_init=nn.initializers.truncated_normal(1/jnp.sqrt(self.latent_spatial_dim*self.latent_spatial_dim*self.latent_dim)))
+        ]
         self.latent_to_modulation = LatentToModulation(
             input_dim=self.input_dim if self.latent_spatial_dim > 1 else 1,
             layer_sizes=[self.hidden_dim] * self.modulation_num_layers,
@@ -314,7 +320,6 @@ class SIREN(nn.Module):
             modulation_dim=self.hidden_dim,
             scale_modulate=self.scale_modulate,
             shift_modulate=self.shift_modulate,
-            initialization='he',
         )
 
         if self.learn_lrs:
@@ -365,6 +370,9 @@ class SIREN(nn.Module):
             lrs = self.lrs()
 
         if latent_feat_map.shape[0] > 1:
+            for layer_num, layer in enumerate(self.conv_blocks):
+                latent_feat_map = layer(latent_feat_map)
+
             latent_vector = interpolate_2d(latent_feat_map, x, self.interpolation_type)
 
             if self.interpolation_type == "1-NN":
