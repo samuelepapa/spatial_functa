@@ -24,7 +24,7 @@ KeyArray = Array
 import jax.numpy as jnp
 from flax import linen as nn
 from flax.training import train_state
-from jax import core, dtypes, random
+from jax import dtypes, random
 
 from spatial_functa.model.interpolation import interpolate_2d
 from spatial_functa.opt_builder import build_lr_scheduler
@@ -38,7 +38,7 @@ class TrainState(train_state.TrainState):
 
 
 def _compute_fans(
-    shape: core.NamedShape,
+    shape: Sequence[int],
     in_axis: Union[int, Sequence[int]] = -2,
     out_axis: Union[int, Sequence[int]] = -1,
     batch_axis: Union[int, Sequence[int]] = (),
@@ -48,9 +48,11 @@ def _compute_fans(
     Axes not in in_axis, out_axis, or batch_axis are assumed to constitute the "receptive field" of
     a convolution (kernel spatial dimensions).
     """
-    if shape.rank <= 1:
+    shape = tuple(shape)
+    rank = len(shape)
+    if rank <= 1:
         raise ValueError(
-            f"Can't compute input and output sizes of a {shape.rank}"
+            f"Can't compute input and output sizes of a {rank}"
             "-dimensional weights tensor. Must be at least 2D."
         )
 
@@ -66,7 +68,8 @@ def _compute_fans(
         batch_size = shape[batch_axis]
     else:
         batch_size = math.prod([shape[i] for i in batch_axis])
-    receptive_field_size = shape.total / in_size / out_size / batch_size
+    total_size = math.prod(shape)
+    receptive_field_size = total_size / in_size / out_size / batch_size
     fan_in = in_size * receptive_field_size
     fan_out = out_size * receptive_field_size
     return fan_in, fan_out
@@ -94,8 +97,7 @@ def custom_uniform(
 
     def init(key: KeyArray, shape: Shape, dtype: Any = dtype) -> Any:
         dtype = dtypes.canonicalize_dtype(dtype)
-        named_shape = core.as_named_shape(shape)
-        fan_in, fan_out = _compute_fans(named_shape, in_axis, out_axis, batch_axis)
+        fan_in, fan_out = _compute_fans(shape, in_axis, out_axis, batch_axis)
         if mode == "fan_in":
             denominator = fan_in
         elif mode == "fan_out":
