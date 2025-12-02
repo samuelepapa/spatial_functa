@@ -12,7 +12,7 @@ description = "A description of your package"
 authors = [{name = "Samuele PApa", email = "samuele.papa@gmail.com"}]
 license = {text = "MIT License"}
 requires-python = ">= 3.10"
-dependencies = ["flax", "optax", "ml_collections", "tqdm", "matplotlib", "wandb", "h5py]
+dependencies = ["flax", "optax", "ml_collections", "tqdm", "matplotlib", "wandb", "h5py"]
 
 [project.urls]
 homepage = "https://github.com/samuelepapa/spatial_functa"
