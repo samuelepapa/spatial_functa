@@ -27,6 +27,6 @@ def set_profiler(profiler_config, step, log_dir):
     # Profiling.
     if profiler_config is not None:
         if step == profiler_config.start_step:
-            jax.profiler.start_trace(log_dir=log_dir)
+            jax.profiler.start_trace(log_dir=str(log_dir))
         if step == profiler_config.end_step:
             jax.profiler.stop_trace()

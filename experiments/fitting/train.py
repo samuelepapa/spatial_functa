@@ -32,7 +32,7 @@ _SCHEDULER = config_flags.DEFINE_config_file(
 )
 
 
-def load_config_and_store() -> Tuple[ConfigDict, Path]:
+def load_config() -> ConfigDict:
     # load the config
     config = _CONFIG.value
     model_config = _MODEL.value
@@ -46,24 +46,30 @@ def load_config_and_store() -> Tuple[ConfigDict, Path]:
     config.lock()
     print(config)
 
-    # create the experiment directory
-    experiment_dir = Path(config.experiment_dir)
-    experiment_dir.mkdir(parents=True, exist_ok=True)
-
-    # store the config
-    with open(experiment_dir / "config.yaml", "w") as fp:
-        json.dump(config.to_dict(), fp)
-
-    return config, experiment_dir
+    return config
 
 
 def main(_):
-    (config, experiment_dir) = load_config_and_store()
+    config = load_config()
 
     # throw warning if the git repository has not been commited
     repo = git.Repo(search_parent_directories=True)
     if repo.is_dirty():
         logging.warning("Your git repository has uncommited changes")
+    # initialize wandb
+    wandb.init(
+        project="spatial_functa",
+        config=config.to_dict(),
+        name=config.experiment_name,
+        dir=config.experiments_root,
+    )
+    run_id = wandb.run.id
+    experiment_dir = Path(config.experiments_root) / Path(config.experiment_name) / Path(run_id)
+    experiment_dir.mkdir(parents=True, exist_ok=True)
+
+    # store the config
+    with open(experiment_dir / "config.yaml", "w") as fp:
+        json.dump(config.to_dict(), fp)
 
     # set the random seed
     np.random.seed(config.seed)
@@ -125,13 +131,6 @@ def main(_):
     )
 
     example_batch = next(iter(train_dataloader))
-    # initialize wandb
-    wandb.init(
-        project="spatial_functa",
-        config=config.to_dict(),
-        name=experiment_dir.name,
-        dir=str(experiment_dir),
-    )
 
     trainer = Trainer(
         model=model,
@@ -140,6 +139,7 @@ def main(_):
         config=config,
         train_loader=train_dataloader,
         val_loader=val_dataloader,
+        experiment_dir=experiment_dir,
         num_devices=jax.device_count(),
     )
 

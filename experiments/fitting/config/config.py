@@ -7,12 +7,13 @@ def get_config():
     config = ConfigDict()
 
     # Experiment directory
-    config.experiment_dir = f'outputs/functa_{time.strftime("%Y%m%d-%H%M%S")}/'
+    config.experiments_root = f'/ivi/xfs/spapa/spatial_functa/'
+    config.experiment_name = f'cifar10_functa'
     config.seed = 0
 
     config.train = ConfigDict()
-    config.train.batch_size = 32
-    config.train.num_steps = 2e5
+    config.train.batch_size = 128
+    config.train.num_steps = 5e5
     config.train.clip_grads = None
     config.train.num_minibatches = 1
 
@@ -24,7 +25,6 @@ def get_config():
 
 
     # Logging
-    config.train.log_dir = config.experiment_dir
     config.train.log_steps = ConfigDict()
     config.train.log_steps.loss = 200
     config.train.log_steps.image = 2500
@@ -37,7 +37,7 @@ def get_config():
 
     # Checkpointing
     config.train.checkpointing = ConfigDict()
-    config.train.checkpointing.checkpoint_dir = config.experiment_dir + "ckpts/"
+    config.train.checkpointing.checkpoint_dir_name = "ckpts"
     config.train.checkpointing.checkpoint_interval = 2500 # in number of steps
     config.train.checkpointing.tracked_metric = "psnr"
 

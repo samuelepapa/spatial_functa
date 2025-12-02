@@ -10,6 +10,7 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
+    Literal,
 )
 
 import jax
@@ -228,15 +229,45 @@ class LatentToModulation(nn.Module):
         )
 
         # create a MLP to process the latent vector based on self.layer_sizes and self.modulation_output_size
+        kernel_init = None
+        if self.initialization == 'he':
+            variance_scaling = getattr(
+                nn.initializers, "VarianceScaling", jax.nn.initializers.variance_scaling
+            )
+            kernel_init = variance_scaling(2.0, "fan_in", "uniform")
+
         self.network = nn.Conv(
-            self.modulation_output_size,
-            1,
-            "SAME",
-            kernel_init=nn.initializers.VarianceScaling(2.0, "fan_in", "uniform") if self.initialization == 'he' else None,
+            features=self.modulation_output_size,
+            kernel_size=(1, 1),
+            strides=1,
+            padding="SAME",
+            kernel_init=kernel_init,
         )
 
     def __call__(self, x: Array) -> Array:
         x = self.network(x)
+        return x
+
+
+class ModulationToShiftScale(nn.Module):
+    num_modulation_layers: int
+    modulation_dim: int
+    input_dim: int
+    shift_modulate: bool = True
+    scale_modulate: bool = True
+
+    def setup(self):
+        if self.shift_modulate and self.scale_modulate:
+            self.modulations_per_unit = 2
+        elif self.shift_modulate or self.scale_modulate:
+            self.modulations_per_unit = 1
+        else:
+            raise ValueError(
+                "At least one of shift_modulate or scale_modulate must be True"
+            )
+        self.modulations_per_layer = self.modulations_per_unit * self.modulation_dim
+
+    def __call__(self, x: Array) -> Dict[str, Array]:
         # Split the output into scale and shift modulations
         if self.modulations_per_unit == 2:
             scale, shift = jnp.split(x, 2, axis=-1)
@@ -316,6 +347,13 @@ class SIREN(nn.Module):
             shift_modulate=self.shift_modulate,
             initialization='he',
         )
+        self.modulation_to_shift_scale = ModulationToShiftScale(
+            num_modulation_layers=self.num_layers - 1,
+            modulation_dim=self.hidden_dim,
+            input_dim=self.input_dim if self.latent_spatial_dim > 1 else 1,
+            shift_modulate=self.shift_modulate,
+            scale_modulate=self.scale_modulate,
+        )
 
         if self.learn_lrs:
             self.lrs = MetaSGDLr(
@@ -364,6 +402,8 @@ class SIREN(nn.Module):
         if self.learn_lrs:
             lrs = self.lrs()
 
+        latent_feat_map = self.latent_to_modulation(latent_feat_map)
+
         if latent_feat_map.shape[0] > 1:
             latent_vector = interpolate_2d(latent_feat_map, x, self.interpolation_type)
 
@@ -401,7 +441,7 @@ class SIREN(nn.Module):
         else:
             latent_vector = latent_feat_map  # jnp.broadcast_to(latent_feat_map[0,0], x.shape[:-1] + (self.latent_dim,))
 
-        modulations = self.latent_to_modulation(latent_vector)
+        modulations = self.modulation_to_shift_scale(latent_vector)
 
         for layer_num, layer in enumerate(self.kernel_net):
             x = layer(x)

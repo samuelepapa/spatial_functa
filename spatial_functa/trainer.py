@@ -112,10 +112,12 @@ class Trainer:
         train_loader,
         val_loader,
         num_devices,
+        experiment_dir,
     ):
         seed = config.get("seed", 42)
         self.model = model
         self.latent_vector_model = latent_vector_model
+        self.experiment_dir = experiment_dir
 
         # data loading
         self.train_loader = train_loader
@@ -128,6 +130,12 @@ class Trainer:
 
         # checkpointing
         self.checkpointing_config = config.train.checkpointing
+        # use Path to create a folder for the experiment id
+
+        #unlock the config
+        self.checkpointing_config.unlock()
+        self.checkpointing_config.checkpoint_dir = self.experiment_dir / Path(self.checkpointing_config.checkpoint_dir_name)
+        self.checkpointing_config.lock()
         self.checkpointer = ocp.StandardCheckpointer()
 
         self.num_steps = int(config.train.num_steps)
@@ -407,7 +415,7 @@ class Trainer:
             batch = self.process_batch(batch)
 
             set_profiler(
-                self.trainer_config.profiler, step, self.trainer_config.log_dir
+                self.trainer_config.profiler, step, self.experiment_dir
             )
 
             if step % self.val_config.val_interval == 0 or (step == self.num_steps - 1):
