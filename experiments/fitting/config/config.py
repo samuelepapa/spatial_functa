@@ -1,5 +1,3 @@
-import time
-
 from ml_collections import ConfigDict
 
 
@@ -7,13 +5,13 @@ def get_config():
     config = ConfigDict()
 
     # Experiment directory
-    config.experiments_root = f'/ivi/xfs/spapa/spatial_functa/'
-    config.experiment_name = f'cifar10_functa'
+    config.experiments_root = '/ivi/xfs/spapa/spatial_functa/'
+    config.experiment_name = 'cifar10_functa'
     config.seed = 0
 
     config.train = ConfigDict()
     config.train.batch_size = 128
-    config.train.num_steps = 5e5
+    config.train.num_steps = 50_000
     config.train.clip_grads = None
     config.train.num_minibatches = 1
 
@@ -22,6 +20,7 @@ def get_config():
     config.train.inner_lr_init_range = (0.005, 0.1)
     config.train.inner_lr_clip_range = (0.0, 1.0)
     config.train.inner_steps = 3
+    config.train.inner_lr_multiplier = 32.0
 
 
     # Logging

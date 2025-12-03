@@ -78,9 +78,10 @@ def inner_fit(
     coords,
     inner_steps,
     target,
+    lr_multiplier,
 ) -> Tuple[Array, Array, Array]:
     if "lrs" in field_params.keys():
-        opt_inner = optax.scale_by_learning_rate(field_params["lrs"]["lrs"])
+        opt_inner = optax.scale_by_learning_rate(field_params["lrs"]["lrs"] * lr_multiplier)
         opt_inner_state = opt_inner.init(latent_params)
     else:
         opt_inner_state = opt_inner.init(latent_params)
@@ -154,7 +155,7 @@ class Trainer:
         self.interpolation_type = config.model.interpolation_type
         self.latent_spatial_dim = config.model.latent_spatial_dim
 
-        self.inner_opt = optax.sgd(learning_rate=config.train.inner_learning_rate)
+        self.inner_opt = optax.sgd(learning_rate=config.train.inner_learning_rate * config.train.inner_lr_multiplier)
         self.inner_steps = config.train.inner_steps
 
         self.init(config.scheduler, self.rng, example_batch)
@@ -211,7 +212,7 @@ class Trainer:
         self.loss_fn = jax.jit(_loss_fn)
 
     def inner_fit(self, field_params, latent_params, coords, target):
-        return jax.vmap(inner_fit, in_axes=(None, 0, None, None, None, 0, None, 0))(
+        return jax.vmap(inner_fit, in_axes=(None, 0, None, None, None, 0, None, 0, None))(
             field_params,
             latent_params,
             self.model,
@@ -220,13 +221,14 @@ class Trainer:
             coords,
             self.inner_steps,
             target,
+            self.trainer_config.inner_lr_multiplier,
         )
 
     def init(self, scheduler_config, rng, example_batch):
         batch = self.process_batch(example_batch)
 
         def get_minibatch(batch, start_idx, end_idx):
-            return jax.tree_map(lambda x: x[:, start_idx:end_idx], batch)
+            return jax.tree.map(lambda x: x[:, start_idx:end_idx], batch)
 
         batch = get_minibatch(
             batch, 0, self.num_signals_per_device // self.num_minibatches
@@ -394,21 +396,20 @@ class Trainer:
             self.checkpointer.save(
                 path,
                 self.state.params,
-                ocp.args.StandardSave(self.state.params),
                 force=True,
             )
 
     def load(self, path):
         self.state = self.state.replace(
             params=self.checkpointer.restore(
-                path, ocp.args.StandardRestore(self.state.params)
+                path, item=self.state.params
             )
         )
 
     def train(self):
         # print all the shape of the parameters
-        print(jax.tree_map(lambda x: x.shape, self.state.params))
-        print(jax.tree_map(lambda x: x.shape, self.latent_params))
+        print(jax.tree.map(lambda x: x.shape, self.state.params))
+        print(jax.tree.map(lambda x: x.shape, self.latent_params))
 
         for step in range(self.num_steps):
             batch = next(self.train_iter)

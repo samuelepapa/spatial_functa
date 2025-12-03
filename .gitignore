@@ -19,3 +19,5 @@ outputs/
 visualizations/
 job_scripts/
 data/
+
+.smanager

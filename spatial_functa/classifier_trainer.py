@@ -152,7 +152,7 @@ class Trainer:
         batch = self.process_batch(example_batch)
 
         def get_minibatch(batch, start_idx, end_idx):
-            return jax.tree_map(lambda x: x[:, start_idx:end_idx], batch)
+            return jax.tree.map(lambda x: x[:, start_idx:end_idx], batch)
 
         batch = get_minibatch(
             batch, 0, self.num_signals_per_device // self.num_minibatches
@@ -291,14 +291,13 @@ class Trainer:
             self.checkpointer.save(
                 path,
                 self.state.params,
-                ocp.args.StandardSave(self.state.params),
                 force=True,
             )
 
     def load(self, path):
         self.state = self.state.replace(
             params=self.checkpointer.restore(
-                path, ocp.args.StandardRestore(self.state.params)
+                path, item=self.state.params
             )
         )
 
@@ -318,7 +317,7 @@ class Trainer:
 
     def train(self):
         # print all the shape of the parameters
-        print(jax.tree_map(lambda x: x.shape, self.state.params))
+        print(jax.tree.map(lambda x: x.shape, self.state.params))
 
         for step in range(self.num_steps):
             batch = next(self.train_iter)

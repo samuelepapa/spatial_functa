@@ -335,6 +335,7 @@ class SIREN(nn.Module):
     learn_lrs: bool = False
     lr_init_range: Tuple[float, float] = (0.0001, 0.001)
     lr_clip_range: Tuple[float, float] = (0.0, 1.0)
+    latent_lr_shape: Tuple[int, int, int] = (1, 1, 1)
     shift_modulate: bool = True
     scale_modulate: bool = True
     interpolation_type: str = "linear"
@@ -359,11 +360,7 @@ class SIREN(nn.Module):
 
         if self.learn_lrs:
             self.lrs = MetaSGDLr(
-                shape=(
-                    self.latent_spatial_dim,
-                    self.latent_spatial_dim,
-                    self.latent_dim,
-                ),
+                shape=self.latent_lr_shape,
                 lr_init_range=self.lr_init_range,
                 lr_clip_range=self.lr_clip_range,
             )

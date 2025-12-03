@@ -41,11 +41,11 @@ class Batch:
 
 
 def default_get_minibatch(batch, start_idx, end_idx):
-    return jax.tree_map(lambda x: x[start_idx:end_idx], batch)
+    return jax.tree.map(lambda x: x[start_idx:end_idx], batch)
 
 
 def default_get_minibatch_slice(batch, minibatch_idx, minibatch_size):
-    return jax.tree_map(
+    return jax.tree.map(
         lambda x: jax.lax.dynamic_slice_in_dim(  # Slicing with variable index (jax.Array).
             x,
             start_index=minibatch_idx * minibatch_size,
@@ -101,10 +101,10 @@ def accumulate_gradients_loop(
                 metrics = step_metrics
                 visuals = step_visuals
             else:
-                grads = jax.tree_map(jnp.add, grads, step_grads)
-                metrics = jax.tree_map(jnp.add, metrics, step_metrics)
+                grads = jax.tree.map(jnp.add, grads, step_grads)
+                metrics = jax.tree.map(jnp.add, metrics, step_metrics)
     # Average gradients over minibatches.
-    grads = jax.tree_map(lambda g: g / num_minibatches, grads)
+    grads = jax.tree.map(lambda g: g / num_minibatches, grads)
     return grads, metrics, visuals
 
 
@@ -158,15 +158,15 @@ def accumulate_gradients_scan(
                 carry_visuals,
             )
 
-        carry = jax.tree_map(
+        carry = jax.tree.map(
             merge_carry, carry, (step_grads, step_metrics, step_visuals)
         )
         return carry, None
 
     # Determine initial shapes for gradients and metrics.
     grads_shapes, metrics_shape = jax.eval_shape(_minibatch_step, 0)
-    grads = jax.tree_map(lambda x: jnp.zeros(x.shape, x.dtype), grads_shapes)
-    metrics = jax.tree_map(lambda x: jnp.zeros(x.shape, x.dtype), metrics_shape)
+    grads = jax.tree.map(lambda x: jnp.zeros(x.shape, x.dtype), grads_shapes)
+    metrics = jax.tree.map(lambda x: jnp.zeros(x.shape, x.dtype), metrics_shape)
     # Loop over minibatches to determine gradients and metrics.
     (grads, (metrics, visuals)), _ = jax.lax.scan(
         _scan_step,
@@ -175,7 +175,7 @@ def accumulate_gradients_scan(
         length=num_minibatches,
     )
     # Average gradients over minibatches.
-    grads = jax.tree_map(lambda g: g / num_minibatches, grads)
+    grads = jax.tree.map(lambda g: g / num_minibatches, grads)
     return grads, metrics, visuals
 
 

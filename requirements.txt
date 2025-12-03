@@ -5,3 +5,4 @@ tqdm
 matplotlib
 wandb
 h5py
+opencv-python

@@ -1,14 +1,13 @@
 import json
 from pathlib import Path
-from typing import Tuple
 
 import git
 import jax
 import numpy as np
 import torch
 import wandb
-from absl import app, flags, logging
-from ml_collections import config_dict, config_flags
+from absl import app, logging
+from ml_collections import config_flags
 from ml_collections.config_dict import ConfigDict
 
 from spatial_functa.dataloader import (
@@ -95,14 +94,14 @@ def main(_):
         num_minibatches=config.train.num_minibatches,
     )
 
-    test_dataloader = get_augmented_dataloader(
-        dataset_config=config.dataset,
-        subset="test",
-        shuffle=False,
-        seed=config.seed,
-        batch_size=config.train.batch_size,
-        num_minibatches=config.train.num_minibatches,
-    )
+    # test_dataloader = get_augmented_dataloader(
+    #     dataset_config=config.dataset,
+    #     subset="test",
+    #     shuffle=False,
+    #     seed=config.seed,
+    #     batch_size=config.train.batch_size,
+    #     num_minibatches=config.train.num_minibatches,
+    # )
 
     # create the model
     model = SIREN(
@@ -120,6 +119,7 @@ def main(_):
         learn_lrs=config.model.learn_lrs,
         lr_init_range=config.train.inner_lr_init_range,
         lr_clip_range=config.train.inner_lr_clip_range,
+        latent_lr_shape=config.model.latent_lr_shape,
         scale_modulate=config.model.scale_modulate,
         shift_modulate=config.model.shift_modulate,
         interpolation_type=config.model.interpolation_type,
